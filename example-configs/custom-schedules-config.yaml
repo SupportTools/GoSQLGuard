@@ -1,0 +1,98 @@
+# GoSQLGuard Custom Schedules Configuration
+# 
+# This configuration demonstrates custom backup schedule configurations,
+# explicitly omitting some schedules while enabling others.
+
+# Debug mode for troubleshooting
+debug: false
+
+# Multi-server database configuration
+database_servers:
+  - name: "primary-db"
+    type: "mysql"
+    host: "db.example.com"
+    port: 3306
+    username: "backup_user"
+    password: "secure_password"
+    # Exclude system databases
+    excludeDatabases:
+      - "information_schema"
+      - "performance_schema"
+      - "mysql"
+      - "sys"
+
+# Storage configuration
+local:
+  enabled: true
+  backupDirectory: "/backups"
+  organizationStrategy: "combined"
+
+s3:
+  enabled: true
+  bucket: "my-backup-bucket"
+  region: "us-east-1"
+  accessKey: "YOUR_ACCESS_KEY"
+  secretKey: "YOUR_SECRET_KEY"
+  prefix: "mysql-backups"
+  useSSL: true
+
+# Backup types configuration with custom schedules
+# Note: hourly and weekly backups are intentionally omitted
+backupTypes:
+  # Custom schedules defined - only these will run:
+  
+  # Every day at 2:30 AM
+  nightly:
+    schedule: "30 2 * * *"
+    local:
+      enabled: true
+      retention:
+        duration: "7d"  # Keep for 7 days
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "30d"  # Keep for 30 days
+        forever: false
+
+  # First day of each month at 1:00 AM
+  monthly:
+    schedule: "0 1 1 * *"
+    local:
+      enabled: true
+      retention:
+        duration: "90d"  # Keep for 90 days
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "365d"  # Keep for 1 year
+        forever: false
+
+  # Every quarter (first day of Jan, Apr, Jul, Oct) at 3:00 AM
+  quarterly:
+    schedule: "0 3 1 1,4,7,10 *"
+    local:
+      enabled: false  # Only store quarterly backups in S3
+      retention:
+        duration: "30d"  # Keep local copies only briefly if enabled
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "0h"  # Zero duration means forever
+        forever: true   # Keep forever
+
+  # Manual backups (triggered via API or UI)
+  manual:
+    schedule: ""  # No schedule - manual only
+    local:
+      enabled: true
+      retention:
+        duration: "30d"
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "365d"
+        forever: false

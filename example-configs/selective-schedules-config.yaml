@@ -1,0 +1,97 @@
+# GoSQLGuard Selective Schedules Configuration
+# 
+# This configuration demonstrates how to selectively enable specific backup
+# schedules while omitting others (hourly and daily are explicitly omitted).
+
+# Debug mode for development environments
+debug: true
+
+# Database server configuration
+database_servers:
+  - name: "app-db"
+    type: "mysql" 
+    host: "db.example.com"
+    port: 3306
+    username: "backup_user"
+    password: "secure_password"
+    excludeDatabases:
+      - "information_schema"
+      - "performance_schema"
+      - "mysql"
+      - "sys"
+
+# Storage configuration
+local:
+  enabled: true
+  backupDirectory: "/backups"
+  organizationStrategy: "combined"
+
+s3:
+  enabled: true
+  bucket: "backup-bucket"
+  region: "us-west-2"
+  accessKey: "YOUR_ACCESS_KEY"
+  secretKey: "YOUR_SECRET_KEY"
+  prefix: "database-backups"
+  useSSL: true
+
+# Backup types configuration
+# IMPORTANT: This configuration ONLY runs weekly and monthly backups
+# Hourly and daily backups are intentionally omitted and will NOT run
+backupTypes:
+  # Note: 'hourly' is not defined, so hourly backups will not run
+  # Note: 'daily' is not defined, so daily backups will not run
+  
+  # Weekly backups run at midnight on Sundays
+  weekly:
+    schedule: "0 0 * * 0"
+    local:
+      enabled: true
+      retention:
+        duration: "4w"  # Keep for 4 weeks
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "12w"  # Keep for 12 weeks
+        forever: false
+        
+  # Monthly backups run at midnight on the first day of each month
+  monthly:
+    schedule: "0 0 1 * *"
+    local:
+      enabled: true
+      retention:
+        duration: "3M"  # Keep for 3 months
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "1y"  # Keep for 1 year
+        forever: false
+  
+  # Manual backups initiated by users
+  manual:
+    schedule: ""  # No schedule
+    local:
+      enabled: true
+      retention:
+        duration: "1M"  # Keep for 1 month
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "2y"  # Keep for 2 years
+        forever: false
+
+  # Custom backup schedule for development purposes
+  # Runs Monday-Friday at 8 PM
+  dev-backup:
+    schedule: "0 20 * * 1-5"
+    local:
+      enabled: true
+      retention:
+        duration: "24h"  # Only keep for 24 hours
+        forever: false
+    s3:
+      enabled: false     # Don't store dev backups in S3

@@ -1,0 +1,19 @@
+apiVersion: v2
+name: gosqlguard
+version: ${CHART_VERSION}
+appVersion: ${APP_VERSION}
+description: An automated MySQL and PostgreSQL backup management system with local and S3-compatible storage support, backup scheduling, and comprehensive metadata tracking.
+type: application
+keywords:
+- kubernetes
+- mysql
+- postgresql
+- backup
+- database
+home: https://github.com/supporttools/GoSQLGuard
+sources:
+- https://github.com/supporttools/GoSQLGuard
+maintainers:
+- name: mattmattox
+  email: mmattox@support.tools
+icon: https://raw.githubusercontent.com/supporttools/GoSQLGuard/main/logo.png

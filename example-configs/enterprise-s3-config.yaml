@@ -1,0 +1,115 @@
+# GoSQLGuard Enterprise S3 Configuration
+# 
+# This configuration demonstrates an enterprise setup with:
+# - Multiple database servers (MySQL and PostgreSQL)
+# - S3 storage with advanced options
+# - Selective backup schedules (daily and weekly only)
+
+# Debug mode (disable in production)
+debug: false
+
+# Multi-server database configuration
+database_servers:
+  # Production MySQL server
+  - name: "prod-mysql"
+    type: "mysql"
+    host: "mysql-prod.internal.example.com"
+    port: 3306
+    username: "backup_service"
+    password: "secure_prod_password"
+    authPlugin: "mysql_native_password"
+    excludeDatabases:
+      - "information_schema"
+      - "performance_schema"
+      - "mysql"
+      - "sys"
+      - "temp_*"  # Exclude temp databases using pattern
+
+  # Production PostgreSQL server
+  - name: "prod-postgres"
+    type: "postgresql"
+    host: "postgres-prod.internal.example.com"
+    port: 5432
+    username: "backup_service"
+    password: "secure_pg_password"
+    # List specific databases to back up
+    includeDatabases:
+      - "main_application"
+      - "customer_data"
+      - "analytics"
+      - "reporting"
+
+# Local storage configuration (minimal, used mainly for temporary storage)
+local:
+  enabled: true
+  backupDirectory: "/mnt/backup-temp"
+  organizationStrategy: "combined"
+
+# Enterprise S3 configuration with MinIO compatibility
+s3:
+  enabled: true
+  bucket: "database-backups"
+  region: "us-east-1"
+  # Can use custom S3-compatible endpoint (MinIO, Ceph, etc.)
+  endpoint: "https://s3.internal.example.com"
+  accessKey: "ENTERPRISE_ACCESS_KEY"
+  secretKey: "ENTERPRISE_SECRET_KEY"
+  prefix: "db-backups"
+  pathStyle: true  # Use path-style S3 requests
+  useSSL: true
+  # Optional: Custom CA certificate for internal S3 service
+  customCAPath: "/etc/ssl/certs/internal-ca.crt"
+  skipCertValidation: false
+  organizationStrategy: "combined"
+
+# Backup types configuration
+# IMPORTANT: Hourly backups are intentionally disabled in this configuration
+# Only daily and weekly backups will run
+backupTypes:
+  # No 'hourly' backup type is defined, so hourly backups will not run
+  
+  # Daily backups run at 1 AM
+  daily:
+    schedule: "0 1 * * *"
+    local:
+      enabled: true  # Keep locally briefly for verification
+      retention:
+        duration: "24h"  # Only keep for 1 day locally
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "14d"  # Keep for 2 weeks
+        forever: false
+
+  # Weekly backups run at 2 AM on Sundays
+  weekly:
+    schedule: "0 2 * * 0"
+    local:
+      enabled: true
+      retention:
+        duration: "48h"  # Keep locally for 2 days
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "90d"  # Keep for 3 months
+        forever: false
+
+  # Manual/on-demand backups
+  manual:
+    schedule: ""
+    local:
+      enabled: true
+      retention:
+        duration: "7d"
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "365d"  # Keep for 1 year
+        forever: false
+
+# Metrics configuration for monitoring
+metrics:
+  port: "9090"

@@ -1,0 +1,158 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gosqlguard.fullname" . }}-config
+  labels:
+    {{- include "gosqlguard.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    # GoSQLGuard Main Configuration
+    debug: {{ .Values.settings.debug }}
+    
+    # Multi-server database configuration
+    {{- if hasKey .Values.settings "database_servers" }}
+    database_servers:
+    {{- range .Values.settings.database_servers }}
+      - name: {{ .name | quote }}
+        type: {{ .type | quote }}
+        host: {{ .host | quote }}
+        port: {{ .port }}
+        username: {{ .username | quote }}
+        password: {{ .password | quote }}
+        {{- if hasKey . "authPlugin" }}
+        authPlugin: {{ .authPlugin | quote }}
+        {{- end }}
+        {{- if hasKey . "includeDatabases" }}
+        includeDatabases:
+        {{- range .includeDatabases }}
+          - {{ . | quote }}
+        {{- end }}
+        {{- end }}
+        {{- if hasKey . "excludeDatabases" }}
+        excludeDatabases:
+        {{- range .excludeDatabases }}
+          - {{ . | quote }}
+        {{- end }}
+        {{- end }}
+        {{- if hasKey . "mysqlDumpOptions" }}
+        mysqlDumpOptions:
+          {{- toYaml .mysqlDumpOptions | nindent 10 }}
+        {{- end }}
+    {{- end }}
+    {{- end }}
+    
+    # Legacy MySQL database configuration
+    {{- if hasKey .Values.settings "mysql" }}
+    mysql:
+      host: {{ .Values.settings.mysql.host | quote }}
+      port: {{ .Values.settings.mysql.port | quote }}
+      username: {{ .Values.settings.mysql.username | quote }}
+      password: {{ .Values.settings.mysql.password | quote }}
+      {{- if hasKey .Values.settings.mysql "includeDatabases" }}
+      includeDatabases:
+      {{- range .Values.settings.mysql.includeDatabases }}
+        - {{ . | quote }}
+      {{- end }}
+      {{- end }}
+      {{- if hasKey .Values.settings.mysql "excludeDatabases" }}
+      excludeDatabases:
+      {{- range .Values.settings.mysql.excludeDatabases }}
+        - {{ . | quote }}
+      {{- end }}
+      {{- end }}
+    {{- end }}
+    
+    # PostgreSQL database configuration
+    {{- if hasKey .Values.settings "postgresql" }}
+    postgresql:
+      host: {{ .Values.settings.postgresql.host | quote }}
+      port: {{ .Values.settings.postgresql.port | quote }}
+      username: {{ .Values.settings.postgresql.username | quote }}
+      password: {{ .Values.settings.postgresql.password | quote }}
+      databases:
+      {{- range .Values.settings.postgresql.databases }}
+        - {{ . | quote }}
+      {{- end }}
+    {{- end }}
+    
+    # MySQL dump options - global defaults
+    {{- if hasKey .Values.settings "mysqlDumpOptions" }}
+    mysqlDumpOptions:
+      {{- toYaml .Values.settings.mysqlDumpOptions | nindent 6 }}
+    {{- end }}
+    
+    # Local backup settings
+    local:
+      enabled: {{ .Values.settings.local.enabled }}
+      backupDirectory: {{ .Values.settings.local.backupDirectory | quote }}
+      {{- if hasKey .Values.settings.local "organizationStrategy" }}
+      organizationStrategy: {{ .Values.settings.local.organizationStrategy | quote }}
+      {{- end }}
+    
+    # S3 storage settings
+    s3:
+      enabled: {{ .Values.settings.s3.enabled }}
+      bucket: {{ .Values.settings.s3.bucket | quote }}
+      region: {{ .Values.settings.s3.region | quote }}
+      endpoint: {{ .Values.settings.s3.endpoint | quote }}
+      accessKey: {{ .Values.settings.s3.accessKey | quote }}
+      secretKey: {{ .Values.settings.s3.secretKey | quote }}
+      {{- if hasKey .Values.settings.s3 "prefix" }}
+      prefix: {{ .Values.settings.s3.prefix | quote }}
+      {{- end }}
+      useSSL: {{ .Values.settings.s3.useSSL }}
+      {{- if hasKey .Values.settings.s3 "skipCertValidation" }}
+      skipCertValidation: {{ .Values.settings.s3.skipCertValidation }}
+      {{- end }}
+      {{- if hasKey .Values.settings.s3 "organizationStrategy" }}
+      organizationStrategy: {{ .Values.settings.s3.organizationStrategy | quote }}
+      {{- end }}
+    
+    # Metrics configuration
+    metrics:
+      port: {{ .Values.settings.metrics.port | quote }}
+    
+    # Backup type configuration
+    backupTypes:
+      hourly:
+        schedule: {{ .Values.settings.backupTypes.hourly.schedule | quote }}
+        local:
+          enabled: {{ .Values.settings.backupTypes.hourly.local.enabled }}
+          retention:
+            duration: {{ .Values.settings.backupTypes.hourly.local.retention.duration | quote }}
+            forever: {{ .Values.settings.backupTypes.hourly.local.retention.forever }}
+        s3:
+          enabled: {{ .Values.settings.backupTypes.hourly.s3.enabled }}
+          {{- if not .Values.settings.backupTypes.hourly.s3.retention.forever }}
+          retention:
+            duration: {{ .Values.settings.backupTypes.hourly.s3.retention.duration | quote }}
+            forever: {{ .Values.settings.backupTypes.hourly.s3.retention.forever }}
+          {{- end }}
+      daily:
+        schedule: {{ .Values.settings.backupTypes.daily.schedule | quote }}
+        local:
+          enabled: {{ .Values.settings.backupTypes.daily.local.enabled }}
+          retention:
+            duration: {{ .Values.settings.backupTypes.daily.local.retention.duration | quote }}
+            forever: {{ .Values.settings.backupTypes.daily.local.retention.forever }}
+        s3:
+          enabled: {{ .Values.settings.backupTypes.daily.s3.enabled }}
+          {{- if not .Values.settings.backupTypes.daily.s3.retention.forever }}
+          retention:
+            duration: {{ .Values.settings.backupTypes.daily.s3.retention.duration | quote }}
+            forever: {{ .Values.settings.backupTypes.daily.s3.retention.forever }}
+          {{- end }}
+      weekly:
+        schedule: {{ .Values.settings.backupTypes.weekly.schedule | quote }}
+        local:
+          enabled: {{ .Values.settings.backupTypes.weekly.local.enabled }}
+          retention:
+            duration: {{ .Values.settings.backupTypes.weekly.local.retention.duration | quote }}
+            forever: {{ .Values.settings.backupTypes.weekly.local.retention.forever }}
+        s3:
+          enabled: {{ .Values.settings.backupTypes.weekly.s3.enabled }}
+          {{- if not .Values.settings.backupTypes.weekly.s3.retention.forever }}
+          retention:
+            duration: {{ .Values.settings.backupTypes.weekly.s3.retention.duration | quote }}
+            forever: {{ .Values.settings.backupTypes.weekly.s3.retention.forever }}
+          {{- end }}

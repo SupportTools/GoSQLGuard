@@ -1,0 +1,112 @@
+// Package database provides an abstraction layer for database operations
+package database
+
+import (
+	"fmt"
+	"log"
+	"strconv"
+	"strings"
+
+	"github.com/supporttools/GoSQLGuard/pkg/config"
+	"github.com/supporttools/GoSQLGuard/pkg/database/mysql"
+	"github.com/supporttools/GoSQLGuard/pkg/database/postgresql"
+)
+
+// InitializeProviders sets up database providers based on configuration
+func InitializeProviders() (map[string]Provider, error) {
+	providers := make(map[string]Provider)
+	
+	// Initialize MySQL provider if enabled
+	if len(config.CFG.MySQL.Databases) > 0 {
+		// Create MySQL provider
+		port, _ := strconv.Atoi(config.CFG.MySQL.Port)
+		if port == 0 {
+			port = 3306 // Default MySQL port
+		}
+		
+		mysqlProvider := &mysql.Provider{
+			Host:      config.CFG.MySQL.Host,
+			Port:      port,
+			User:      config.CFG.MySQL.Username,
+			Password:  config.CFG.MySQL.Password,
+			Databases: config.CFG.MySQL.Databases,
+		}
+		
+		// Validate configuration
+		if err := mysqlProvider.Validate(); err != nil {
+			return nil, fmt.Errorf("invalid MySQL configuration: %w", err)
+		}
+		
+		providers["mysql"] = mysqlProvider
+		log.Printf("MySQL provider initialized with %d databases", len(config.CFG.MySQL.Databases))
+	}
+	
+	// In the future we'll add PostgreSQL support here
+	// This will require updating the config package to include PostgreSQL settings
+	
+	return providers, nil
+}
+
+// GetProviderForDatabase returns the appropriate provider for a given database
+func GetProviderForDatabase(providers map[string]Provider, database string) (Provider, error) {
+	// Check if specific provider name is prefixed (e.g. "postgresql:dbname")
+	parts := strings.SplitN(database, ":", 2)
+	if len(parts) == 2 {
+		providerName := parts[0]
+		dbName := parts[1]
+		
+		provider, exists := providers[providerName]
+		if !exists {
+			return nil, fmt.Errorf("provider '%s' not found for database", providerName)
+		}
+		
+		// Check if database is in provider's list
+		// We'd need to check the specific provider type
+		var found bool
+		
+		switch p := provider.(type) {
+		case *mysql.Provider:
+			for _, db := range p.Databases {
+				if db == dbName {
+					found = true
+					break
+				}
+			}
+		case *postgresql.Provider:
+			for _, db := range p.Databases {
+				if db == dbName {
+					found = true
+					break
+				}
+			}
+		}
+		
+		if !found {
+			return nil, fmt.Errorf("database '%s' not found in provider '%s'", dbName, providerName)
+		}
+		
+		return provider, nil
+	}
+	
+	// No specific provider given, check all providers
+	for _, provider := range providers {
+		var databases []string
+		
+		switch p := provider.(type) {
+		case *mysql.Provider:
+			databases = p.Databases
+		case *postgresql.Provider:
+			databases = p.Databases
+		default:
+			continue
+		}
+		
+		for _, db := range databases {
+			if db == database {
+				return provider, nil
+			}
+		}
+	}
+	
+	return nil, fmt.Errorf("no provider found for database '%s'", database)
+}

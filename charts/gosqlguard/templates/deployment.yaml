@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gosqlguard.fullname" . }}
+  labels:
+    {{- include "gosqlguard.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gosqlguard.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "gosqlguard.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "gosqlguard.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: CONFIG_PATH
+              value: "/app/config/config.yaml"
+            {{- if .Values.settings.debug }}
+            - name: DEBUG
+              value: "true"
+            {{- end }}
+            # Support custom S3 endpoint regions
+            - name: AWS_IGNORE_CONFIGURED_ENDPOINT_URLS
+              value: "true"
+            - name: AWS_S3_FORCE_PATH_STYLE
+              value: "true"
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.adminUIPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config
+            {{- if .Values.persistence.enabled }}
+            - name: backup-volume
+              mountPath: {{ .Values.settings.local.backupDirectory }}
+            {{- end }}
+            {{- if .Values.metadataPersistence.enabled }}
+            - name: metadata-volume
+              mountPath: /app/metadata
+            {{- end }}
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "gosqlguard.fullname" . }}-config
+        {{- if .Values.persistence.enabled }}
+        - name: backup-volume
+          persistentVolumeClaim:
+            claimName: {{ include "gosqlguard.backupVolumeName" . }}
+        {{- end }}
+        {{- if .Values.metadataPersistence.enabled }}
+        - name: metadata-volume
+          persistentVolumeClaim:
+            claimName: {{ include "gosqlguard.metadataVolumeName" . }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

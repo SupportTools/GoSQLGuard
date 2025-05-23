@@ -1,0 +1,239 @@
+# Production Multi-Server Configuration Example
+# This configuration demonstrates a typical production setup with multiple MySQL servers
+
+# Metadata database for centralized tracking
+metadata_database:
+  enabled: true
+  host: "metadata-db.internal"
+  port: 3306
+  database: "gosqlguard_metadata"
+  username: "${METADATA_DB_USER}"
+  password: "${METADATA_DB_PASSWORD}"
+  auto_migrate: true
+  max_open_conns: 25
+  max_idle_conns: 10
+  conn_max_lifetime: "5m"
+
+# Multiple database servers
+database_servers:
+  # Primary production server
+  - name: "prod-mysql-primary"
+    type: "mysql"
+    host: "prod-db-primary.internal"
+    port: "3306"
+    username: "${PROD_DB_BACKUP_USER}"
+    password: "${PROD_DB_BACKUP_PASSWORD}"
+    auth_plugin: "caching_sha2_password"
+    include_databases:
+      - "users"
+      - "orders"
+      - "products"
+      - "analytics"
+    exclude_databases:
+      - "*_temp"
+      - "*_test"
+    mysql_dump_options:
+      single_transaction: true
+      master_data: 2
+      quick: true
+      routines: true
+      triggers: true
+      events: true
+
+  # Read replica for analytics
+  - name: "prod-mysql-analytics"
+    type: "mysql"
+    host: "prod-db-analytics.internal"
+    port: "3306"
+    username: "${PROD_DB_BACKUP_USER}"
+    password: "${PROD_DB_BACKUP_PASSWORD}"
+    auth_plugin: "caching_sha2_password"
+    include_databases:
+      - "analytics"
+      - "reporting"
+    mysql_dump_options:
+      single_transaction: true
+      skip_lock_tables: true
+
+  # Staging server
+  - name: "staging-mysql"
+    type: "mysql"
+    host: "staging-db.internal"
+    port: "3306"
+    username: "${STAGING_DB_BACKUP_USER}"
+    password: "${STAGING_DB_BACKUP_PASSWORD}"
+    exclude_databases:
+      - "test_*"
+    mysql_dump_options:
+      single_transaction: true
+      routines: true
+
+# Backup organization by server for clarity
+backup_organization: "by-server"
+
+# Local storage configuration
+local:
+  enabled: true
+  backup_directory: "/mnt/backups"
+
+# S3 storage for long-term retention
+s3:
+  enabled: true
+  endpoint: "https://s3.amazonaws.com"
+  region: "us-east-1"
+  access_key: "${AWS_ACCESS_KEY_ID}"
+  secret_key: "${AWS_SECRET_ACCESS_KEY}"
+  bucket: "${BACKUP_S3_BUCKET}"
+  prefix: "gosqlguard/mysql"
+  force_path_style: false
+  retention_policy:
+    default: "30d"
+    yearly: "7y"
+
+# Backup types with different retention policies
+backup_types:
+  # Frequent backups for critical data
+  hourly:
+    local:
+      enabled: true
+      retention:
+        count: 24  # Keep 24 hours locally
+    s3:
+      enabled: true
+      retention:
+        duration: "7d"  # Keep 1 week in S3
+    mysql_dump_options:
+      quick: true
+      single_transaction: true
+
+  # Daily backups for all servers
+  daily:
+    local:
+      enabled: true
+      retention:
+        count: 7  # Keep 1 week locally
+    s3:
+      enabled: true
+      retention:
+        duration: "30d"  # Keep 30 days in S3
+    mysql_dump_options:
+      single_transaction: true
+      routines: true
+      events: true
+      triggers: true
+
+  # Weekly backups for compliance
+  weekly:
+    local:
+      enabled: true
+      retention:
+        count: 4  # Keep 4 weeks locally
+    s3:
+      enabled: true
+      retention:
+        duration: "90d"  # Keep 3 months in S3
+    mysql_dump_options:
+      single_transaction: true
+      routines: true
+      events: true
+      triggers: true
+      hex_blob: true  # For binary data integrity
+
+  # Monthly backups for long-term retention
+  monthly:
+    local:
+      enabled: false  # Don't keep monthly backups locally
+    s3:
+      enabled: true
+      retention:
+        duration: "365d"  # Keep 1 year in S3
+    mysql_dump_options:
+      single_transaction: true
+      routines: true
+      events: true
+      triggers: true
+      hex_blob: true
+      complete_insert: true  # For better compatibility
+
+  # Manual backups for special occasions
+  manual:
+    local:
+      enabled: true
+      retention:
+        count: 5
+    s3:
+      enabled: true
+      retention:
+        duration: "90d"
+
+# Backup schedules
+backup_schedules:
+  # Critical databases - hourly backups
+  critical_hourly:
+    schedule: "0 * * * *"  # Every hour
+    servers:
+      - name: "prod-mysql-primary"
+        databases:
+          - "users"
+          - "orders"
+    type: "hourly"
+
+  # All production databases - daily backups
+  production_daily:
+    schedule: "0 2 * * *"  # 2 AM daily
+    servers:
+      - "prod-mysql-primary"
+      - "prod-mysql-analytics"
+    type: "daily"
+
+  # Staging - daily backups
+  staging_daily:
+    schedule: "0 3 * * *"  # 3 AM daily
+    servers:
+      - "staging-mysql"
+    type: "daily"
+
+  # Weekly backups on Sunday
+  weekly_full:
+    schedule: "0 4 * * 0"  # 4 AM Sunday
+    servers:
+      - "prod-mysql-primary"
+      - "prod-mysql-analytics"
+    type: "weekly"
+
+  # Monthly backups on the 1st
+  monthly_archive:
+    schedule: "0 5 1 * *"  # 5 AM on the 1st
+    servers:
+      - "prod-mysql-primary"
+    type: "monthly"
+
+# Performance settings
+performance:
+  max_concurrent_backups: 2  # Limit concurrent backups
+  compression_level: 6  # Balanced compression
+
+# Admin interface
+admin:
+  enabled: true
+  port: "8080"
+  
+# Prometheus metrics
+metrics:
+  enabled: true
+  port: "9090"
+
+# Logging configuration
+logging:
+  level: "info"
+  format: "json"
+  output: "/var/log/gosqlguard/gosqlguard.log"
+  max_size: "100MB"
+  max_backups: 10
+  max_age: 30
+
+# Health check
+health_check:
+  enabled: true
+  interval: "5m"
+  timeout: "30s"

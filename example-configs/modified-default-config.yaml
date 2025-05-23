@@ -1,0 +1,123 @@
+# Modified Default Configuration - Hourly Backups Disabled
+# This configuration is based on the default config.yaml but with hourly backups removed
+
+# MySQL connection settings
+mysql:
+  host: "mysql-service"
+  port: "3306"
+  username: "backup-user"
+  password: "${MYSQL_PASSWORD}"
+  # If includeDatabases is set, only these databases will be backed up
+  includeDatabases:
+    - "db1"
+    - "db2"
+    - "db3"
+  # If includeDatabases is empty but excludeDatabases is set,
+  # all databases except these will be backed up
+  excludeDatabases: []
+
+# Default MySQL dump options applied to all backup types
+# These can be overridden per backup type
+mysqlDumpOptions:
+  singleTransaction: true # --single-transaction
+  quick: true # --quick
+  skipLockTables: true # --skip-lock-tables
+  skipAddLocks: true # --skip-add-locks
+  skipComments: true # --skip-comments
+  extendedInsert: true # --extended-insert
+  skipExtendedInsert: false # --skip-extended-insert
+  compress: true # --compress
+  customOptions: [] # Any additional custom options
+
+# Local backup settings
+local:
+  enabled: true
+  backupDirectory: "./data/backups"
+
+# S3 storage settings
+s3:
+  enabled: true
+  bucket: "my-database-backups"
+  region: "us-east-1"
+  endpoint: "" # Empty for AWS S3, set for S3-compatible storage
+  accessKey: "${S3_ACCESS_KEY}"
+  secretKey: "${S3_SECRET_KEY}"
+  prefix: "mysql/prod"
+  useSSL: true
+
+# Metrics configuration
+metrics:
+  port: "8080"
+
+# Backup type configuration
+# Note: hourly backups have been intentionally removed from this configuration
+backupTypes:
+  # hourly configuration has been removed, so hourly backups will not run
+  
+  daily:
+    schedule: "0 0 * * *" # Every day at midnight
+    local:
+      enabled: true
+      retention:
+        duration: "720h" # 30 days
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "2160h" # 90 days
+        forever: false
+    # Daily backup options - same as defaults but left here for easy customization
+    mysqlDumpOptions:
+      singleTransaction: true
+      quick: true
+  weekly:
+    schedule: "0 0 * * 0" # Every Sunday at midnight
+    local:
+      enabled: true
+      retention:
+        duration: "2016h" # 12 weeks
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "4320h" # 6 months
+        forever: false
+    # Use default MySQL dump options
+  monthly:
+    schedule: "0 0 1 * *" # First day of month at midnight
+    local:
+      enabled: true
+      retention:
+        duration: "8760h" # 1 year
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "17520h" # 2 years
+        forever: false
+    # Use default MySQL dump options
+  yearly:
+    schedule: "0 0 1 1 *" # January 1st at midnight
+    local:
+      enabled: true
+      retention:
+        duration: "0h"
+        forever: true # Keep forever locally
+    s3:
+      enabled: true
+      retention:
+        duration: "0h"
+        forever: true # Keep forever in S3
+    # More complete dump for yearly backups
+    mysqlDumpOptions:
+      singleTransaction: true
+      quick: true
+      skipLockTables: false
+      skipAddLocks: false
+      skipComments: false # Include comments for better documentation
+      extendedInsert: true
+      compress: true # Use compression for network transfer
+      customOptions:
+        - "--routines" # Include stored procedures and functions
+        - "--triggers" # Include triggers
+        - "--events" # Include events

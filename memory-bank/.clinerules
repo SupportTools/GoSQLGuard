@@ -1,0 +1,91 @@
+# GoSQLGuard Project Intelligence
+
+## Project Patterns
+
+### Code Structure
+- **Go Idioms**: The project follows standard Go idioms and conventions
+- **Package Structure**: Organized by functionality with clear separation of concerns
+- **Interface-Based Design**: Storage providers and other components use interfaces for abstraction
+
+### Code Style
+- **Error Handling**: Always check errors and propagate with context
+- **Logging**: Use log package with appropriate levels (debug, info, warning, error)
+- **Configuration**: Central config package, no global variables outside config package
+- **Comments**: Every exported function should have a comment
+
+### Development Workflow
+- **Small Commits**: Prefer small, focused changes rather than large refactors
+- **Bug Fixes**: Address type conversion issues in templates immediately 
+- **Feature Order**: Focus on stability and robustness before adding new features
+- **Test First**: Critical paths should have tests before implementation
+
+## User Preferences
+
+### Implementation Priorities
+- **Reliability**: Prioritize stable operation over new features
+- **Simplicity**: Favor simpler solutions over complex ones
+- **Pragmatism**: Focus on practical solutions that work well for the target use case
+- **Performance**: Be mindful of performance, especially for I/O operations
+
+### Technical Decisions
+- **UI Design**: Minimal JavaScript, server-side rendering preferred
+- **Storage**: Support both local filesystem and S3-compatible storage
+- **Configuration**: YAML with environment variable overrides
+- **Persistence**: JSON for metadata persistence due to human-readability
+
+### Communication Style
+- **Technical Depth**: Provide detailed technical explanations
+- **Visual Aids**: Use diagrams to explain system architecture and flows
+- **Pragmatic Focus**: Emphasize practical solutions over theoretical ideals
+- **Explicit Tradeoffs**: Clearly articulate the tradeoffs in technical decisions
+
+## Known Challenges
+
+### Technical Issues
+- **Template Type Safety**: Handling type conversions between int64/uint64 in templates
+- **Metadata Growth**: Managing the size of the metadata store over time
+- **Error Recovery**: Improving recovery from transient failures
+- **UI Edge Cases**: Handling null or unexpected values in the UI
+
+### Project Context
+- **Target Usage**: Designed for moderate-scale deployments (dozens of databases)
+- **Deployment Environment**: Should work in both containerized and traditional environments
+- **External Dependencies**: Relies on external tools (mysqldump, gzip) for core functionality
+- **Recovery Process**: Backup verification and restoration are separate concerns
+
+## Tool Usage Patterns
+
+### Development Tools
+- **Go Build**: Standard go build command for compilation
+- **Local Testing**: MySQL and MinIO in Docker containers for testing
+- **Debugging**: Log-based debugging with DEBUG=true environment variable
+
+### Configuration
+- **Primary Config**: YAML file at CONFIG_PATH
+- **Override Method**: Environment variables override file config
+- **Debug Mode**: Set DEBUG=true for verbose logging
+
+## Hosting & Deployment
+
+### Infrastructure
+- **Self-Hosted**: Designed to be deployed by users in their own environments
+- **Container-Ready**: Works well in Docker/Kubernetes environments
+- **Persistence Needs**: Requires persistent storage for backups and metadata
+- **Networking**: Admin UI runs on port 8080 by default
+
+### Integration Points
+- **Prometheus**: Metrics exposed for scraping by Prometheus
+- **MySQL**: Connects to MySQL databases for backup
+- **S3 Services**: Compatible with AWS S3 and S3-compatible storage services
+
+## Project Evolution
+
+### Recent Focus
+- **Metadata System**: Integration of metadata tracking across components
+- **UI Improvements**: Fixing template rendering and type conversion issues
+- **Retention Policies**: Enhanced to update metadata when backups are deleted
+
+### Upcoming Priorities
+- **Testing**: Verify metadata persistence and recovery
+- **Performance**: Optimize for large backup sets
+- **Filtering**: Improve metadata filtering capabilities

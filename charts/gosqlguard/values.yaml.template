@@ -1,0 +1,154 @@
+# Default values for gosqlguard
+# This is a YAML-formatted file.
+
+replicaCount: 1
+
+image:
+  repository: supporttools/gosqlguard
+  pullPolicy: IfNotPresent
+  tag: "${IMAGE_TAG}"  # Will be substituted by CI/CD pipeline
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# GoSQLGuard specific settings
+settings:
+  # Debug mode
+  debug: false
+  
+  # Admin UI configuration
+  adminUI:
+    enabled: true
+    port: 8080
+  
+  # Metrics configuration  
+  metrics:
+    enabled: true
+    port: 9090
+  
+  # Database connections
+  databases:
+    - name: "db1"
+      type: "mysql"  # mysql or postgresql
+      host: "mysql.example.com"
+      port: 3306
+      user: "backup_user"
+      password: "password"  # Will be stored in a Kubernetes secret
+      databases: ["db1", "db2", "db3"]  # List of databases to backup
+  
+  # MySQL dump options - global defaults
+  mysqlDumpOptions:
+    singleTransaction: true    # --single-transaction
+    quick: true                # --quick
+    skipLockTables: false      # --skip-lock-tables
+    skipAddLocks: false        # --skip-add-locks
+    skipComments: false        # --skip-comments
+    extendedInsert: true       # --extended-insert
+    skipExtendedInsert: false  # --skip-extended-insert
+    compress: false            # --compress
+    customOptions: []          # Any additional custom options as a list
+    
+  # Backup schedules
+  backupSchedules:
+    hourly:
+      enabled: true
+      cron: "0 * * * *"  # Every hour
+      retention: 24  # Keep 24 hourly backups
+      mysqlDumpOptions:
+        skipComments: true     # Skip SQL comments for smaller hourly backups
+    daily:
+      enabled: true
+      cron: "0 0 * * *"  # Every day at midnight
+      retention: 7  # Keep 7 daily backups
+      mysqlDumpOptions: {}     # Use global defaults
+    weekly:
+      enabled: true
+      cron: "0 0 * * 0"  # Every Sunday at midnight
+      retention: 4  # Keep 4 weekly backups
+      mysqlDumpOptions: {}     # Use global defaults
+    monthly:
+      enabled: false
+      cron: "0 0 1 * *"  # First day of month at midnight
+      retention: 12      # Keep 12 monthly backups
+      mysqlDumpOptions: {}     # Use global defaults
+    yearly:
+      enabled: false
+      cron: "0 0 1 1 *"  # January 1st at midnight
+      retention: 5       # Keep 5 yearly backups
+      mysqlDumpOptions:
+        skipComments: false    # Include comments for better documentation
+        compress: true         # Use compression for network transfer
+        customOptions:         # More complete dump for yearly backups
+          - "--routines"       # Include stored procedures and functions
+          - "--triggers"       # Include triggers
+          - "--events"         # Include events
+  
+  # Storage configuration
+  storage:
+    local:
+      enabled: true
+      path: "/backups"
+    s3:
+      enabled: false
+      endpoint: "s3.amazonaws.com"
+      bucket: "gosqlguard-backups"
+      region: "us-east-1"
+      accessKey: ""  # Will be stored in a Kubernetes secret
+      secretKey: ""  # Will be stored in a Kubernetes secret
+      useSSL: true
+
+# Persistence configuration for local backups
+persistence:
+  enabled: true
+  size: "10Gi"
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  
+# Additional persistence for metadata
+metadataPersistence:
+  enabled: true
+  size: "1Gi"
+  storageClass: ""
+  accessMode: ReadWriteOnce
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: "gosqlguard"
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+securityContext: {}
+
+service:
+  type: ClusterIP
+  adminUIPort: 8080
+  metricsPort: 9090
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Optional ingress for admin UI
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: gosqlguard.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []

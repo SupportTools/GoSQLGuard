@@ -1,0 +1,232 @@
+# Sharded Database Configuration Example
+# This configuration demonstrates backing up a sharded database architecture
+
+# Database servers - User data sharded across 4 servers
+database_servers:
+  # User shard 1 (users with ID % 4 = 0)
+  - name: "users-shard-00"
+    type: "mysql"
+    host: "shard-00.users.internal"
+    port: "3306"
+    username: "backup_user"
+    password: "${BACKUP_PASSWORD}"
+    auth_plugin: "caching_sha2_password"
+    include_databases:
+      - "users_00"
+      - "users_metadata"
+    mysql_dump_options:
+      single_transaction: true
+      routines: true
+      triggers: true
+
+  # User shard 2 (users with ID % 4 = 1)
+  - name: "users-shard-01"
+    type: "mysql"
+    host: "shard-01.users.internal"
+    port: "3306"
+    username: "backup_user"
+    password: "${BACKUP_PASSWORD}"
+    auth_plugin: "caching_sha2_password"
+    include_databases:
+      - "users_01"
+      - "users_metadata"
+    mysql_dump_options:
+      single_transaction: true
+      routines: true
+      triggers: true
+
+  # User shard 3 (users with ID % 4 = 2)
+  - name: "users-shard-02"
+    type: "mysql"
+    host: "shard-02.users.internal"
+    port: "3306"
+    username: "backup_user"
+    password: "${BACKUP_PASSWORD}"
+    auth_plugin: "caching_sha2_password"
+    include_databases:
+      - "users_02"
+      - "users_metadata"
+    mysql_dump_options:
+      single_transaction: true
+      routines: true
+      triggers: true
+
+  # User shard 4 (users with ID % 4 = 3)
+  - name: "users-shard-03"
+    type: "mysql"
+    host: "shard-03.users.internal"
+    port: "3306"
+    username: "backup_user"
+    password: "${BACKUP_PASSWORD}"
+    auth_plugin: "caching_sha2_password"
+    include_databases:
+      - "users_03"
+      - "users_metadata"
+    mysql_dump_options:
+      single_transaction: true
+      routines: true
+      triggers: true
+
+  # Central configuration database
+  - name: "config-master"
+    type: "mysql"
+    host: "config-db.internal"
+    port: "3306"
+    username: "backup_user"
+    password: "${BACKUP_PASSWORD}"
+    include_databases:
+      - "shard_config"
+      - "routing_rules"
+      - "global_settings"
+    mysql_dump_options:
+      single_transaction: true
+      master_data: 2  # Include binlog position
+      routines: true
+      events: true
+
+# Organize backups by type to see all shards together
+backup_organization: "by-type"
+
+# Storage configuration
+local:
+  enabled: true
+  backup_directory: "/mnt/sharded-backups"
+
+s3:
+  enabled: true
+  endpoint: "https://s3.amazonaws.com"
+  region: "us-west-2"
+  access_key: "${AWS_ACCESS_KEY_ID}"
+  secret_key: "${AWS_SECRET_ACCESS_KEY}"
+  bucket: "sharded-db-backups"
+  prefix: "gosqlguard"
+
+# Backup types
+backup_types:
+  # Frequent backups for all shards
+  hourly:
+    local:
+      enabled: true
+      retention:
+        count: 12  # Keep 12 hours
+    s3:
+      enabled: true
+      retention:
+        duration: "48h"  # Keep 2 days in S3
+    mysql_dump_options:
+      quick: true
+      single_transaction: true
+
+  # Daily synchronized backups
+  daily:
+    local:
+      enabled: true
+      retention:
+        count: 7
+    s3:
+      enabled: true
+      retention:
+        duration: "30d"
+    mysql_dump_options:
+      single_transaction: true
+      routines: true
+      triggers: true
+      extended_insert: true
+
+  # Weekly full backups
+  weekly:
+    local:
+      enabled: true
+      retention:
+        count: 2
+    s3:
+      enabled: true
+      retention:
+        duration: "90d"
+    mysql_dump_options:
+      single_transaction: true
+      routines: true
+      triggers: true
+      events: true
+      hex_blob: true
+
+# Synchronized backup schedules for consistency
+backup_schedules:
+  # Hourly backups - staggered to reduce load
+  shards_hourly_group1:
+    schedule: "0 * * * *"  # On the hour
+    servers:
+      - "users-shard-00"
+      - "users-shard-01"
+    type: "hourly"
+
+  shards_hourly_group2:
+    schedule: "15 * * * *"  # 15 minutes past
+    servers:
+      - "users-shard-02"
+      - "users-shard-03"
+    type: "hourly"
+
+  config_hourly:
+    schedule: "30 * * * *"  # 30 minutes past
+    servers:
+      - "config-master"
+    type: "hourly"
+
+  # Daily synchronized backup for all shards
+  all_shards_daily:
+    schedule: "0 2 * * *"  # 2 AM - all shards together
+    servers:
+      - "users-shard-00"
+      - "users-shard-01"
+      - "users-shard-02"
+      - "users-shard-03"
+      - "config-master"
+    type: "daily"
+
+  # Weekly backup on Sunday
+  all_shards_weekly:
+    schedule: "0 3 * * 0"  # 3 AM Sunday
+    servers:
+      - "users-shard-00"
+      - "users-shard-01"
+      - "users-shard-02"
+      - "users-shard-03"
+      - "config-master"
+    type: "weekly"
+
+# Performance settings optimized for multiple servers
+performance:
+  max_concurrent_backups: 4  # Allow parallel shard backups
+  compression_level: 6
+
+# Metadata storage for tracking all shards
+metadata_database:
+  enabled: true
+  host: "metadata-db.internal"
+  port: 3306
+  database: "gosqlguard_sharded"
+  username: "metadata_user"
+  password: "${METADATA_PASSWORD}"
+  auto_migrate: true
+  max_open_conns: 50  # Higher for multiple shards
+  max_idle_conns: 20
+
+# Admin interface
+admin:
+  enabled: true
+  port: "8080"
+
+# Metrics with shard labels
+metrics:
+  enabled: true
+  port: "9090"
+  labels:
+    environment: "production"
+    cluster: "sharded-users"
+
+# Logging
+logging:
+  level: "info"
+  format: "json"
+  output: "/var/log/gosqlguard/sharded.log"

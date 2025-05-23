@@ -1,0 +1,63 @@
+# MySQL connection settings
+mysql:
+  host: "mysql-service"
+  port: "3306"
+  username: "backup-user"
+  password: "test-password"
+  # If includeDatabases is set, only these databases will be backed up
+  includeDatabases:
+    - "db1"
+    - "db2"
+    - "db3"
+  # If includeDatabases is empty but excludeDatabases is set, 
+  # all databases except these will be backed up
+  excludeDatabases: []
+
+# Local backup settings
+local:
+  enabled: true
+  backupDirectory: "./backups"  # Use a local directory for testing
+
+# S3 storage settings
+s3:
+  enabled: true
+  bucket: "gosqlguard"
+  region: "us-central-1"
+  endpoint: "https://s3.support.tools:9000"  # External S3-compatible endpoint
+  accessKey: "vuGNTXWipzZrWGNbBLWW"
+  secretKey: "O3KHT4VIkKcix02xbyZnRtAw2Nqe1jQ94hl6FDY9"
+  prefix: "controller1/mysql/backups"  # Using a folder prefix for multi-controller sharing
+  useSSL: true  # Set to true for HTTPS endpoints
+  customCAPath: ""  # Path to a custom CA certificate file if needed
+  skipCertValidation: false  # Set to true to skip SSL certificate validation (insecure)
+
+# Metrics configuration
+metrics:
+  port: "8080"
+
+# Backup type configuration
+backupTypes:
+  hourly:
+    schedule: "0 * * * *"
+    local:
+      enabled: true
+      retention:
+        duration: "72h"
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "72h"
+        forever: false
+  daily:
+    schedule: "0 0 * * *"
+    local:
+      enabled: true
+      retention:
+        duration: "720h"
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "2160h"
+        forever: false

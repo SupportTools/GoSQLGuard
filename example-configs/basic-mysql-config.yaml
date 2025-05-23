@@ -1,0 +1,75 @@
+# GoSQLGuard Basic MySQL Configuration
+# 
+# This is a simple configuration for backing up a single MySQL server
+# with daily and weekly backups (hourly intentionally omitted).
+
+# Debug mode for troubleshooting (set to false in production)
+debug: false
+
+# Single MySQL server configuration
+mysql:
+  host: "localhost"
+  port: "3306"
+  username: "backup_user"
+  password: "your_secure_password"
+  # Optional: specify databases to include
+  # includeDatabases:
+  #   - "app_database"
+  #   - "customer_database"
+  # Optional: specify databases to exclude
+  excludeDatabases:
+    - "information_schema"
+    - "performance_schema"
+    - "mysql"
+    - "sys"
+
+# Storage configuration
+local:
+  enabled: true
+  backupDirectory: "/backups"
+  organizationStrategy: "combined"  # combined, server-only, or type-only
+
+# S3 is disabled in this example
+s3:
+  enabled: false
+  bucket: "database-backups"
+  region: "us-east-1"
+  accessKey: "YOUR_ACCESS_KEY"
+  secretKey: "YOUR_SECRET_KEY"
+  prefix: "mysql-backups"
+  useSSL: true
+
+# Backup types configuration
+# Note: hourly backups are intentionally omitted
+backupTypes:
+  # Only daily and weekly backups are configured
+  daily:
+    schedule: "0 0 * * *"  # Every day at midnight
+    local:
+      enabled: true
+      retention:
+        duration: "7d"  # Keep for 7 days
+        forever: false
+    s3:
+      enabled: false
+
+  weekly:
+    schedule: "0 0 * * 0"  # Every Sunday at midnight
+    local:
+      enabled: true
+      retention:
+        duration: "4w"  # Keep for 4 weeks
+        forever: false
+    s3:
+      enabled: false
+
+  # Manual backups can be triggered through the API or UI
+  manual:
+    schedule: ""  # No schedule - triggered manually
+    local:
+      enabled: true
+      retention:
+        duration: "30d"  # Keep for 30 days
+        forever: false
+    s3:
+      enabled: false

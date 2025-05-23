@@ -1,0 +1,159 @@
+# GoSQLGuard Multi-Server Configuration Example
+# 
+# This example configuration shows how to set up multiple database servers 
+# for backup, including servers with different MySQL versions that require
+# specific authentication plugins.
+
+# Debug mode for troubleshooting
+debug: true
+
+# Multi-server database configuration
+database_servers:
+  # MySQL 5.7 server (uses mysql_native_password by default)
+  - name: "production-mysql57"
+    type: "mysql"
+    host: "prod-mysql.example.com"
+    port: 3306
+    username: "backup_user"
+    password: "secure_password"
+    # No authPlugin needed for MySQL 5.7 (uses mysql_native_password by default)
+    excludeDatabases:
+      - "performance_schema"
+      - "information_schema"
+      - "sys"
+      - "mysql"
+    mysqlDumpOptions:
+      singleTransaction: true
+      quick: true
+      skipLockTables: true
+      compress: true
+      
+  # MySQL 8.0+ server (uses caching_sha2_password by default)
+  - name: "staging-mysql80"
+    type: "mysql"
+    host: "staging-mysql.example.com"
+    port: 3306
+    username: "backup_user"
+    password: "secure_password"
+    authPlugin: "mysql_native_password"  # For MySQL 8.0+ compatibility
+    excludeDatabases:
+      - "performance_schema"
+      - "information_schema"
+      - "sys"
+      - "mysql"
+    mysqlDumpOptions:
+      singleTransaction: true
+      quick: true
+      skipLockTables: true
+      compress: true
+      
+  # Development server with specific databases to include
+  - name: "dev-server"
+    type: "mysql"
+    host: "dev-mysql.example.com"
+    port: 3306
+    username: "backup_user"
+    password: "secure_password"
+    authPlugin: "mysql_native_password"  # For MySQL 8.0+ compatibility
+    # Only backup specific databases
+    includeDatabases:
+      - "app_db"
+      - "customer_db"
+      - "test_db"
+    mysqlDumpOptions:
+      singleTransaction: true
+      quick: true
+      skipLockTables: true
+      # Custom options for the dev server
+      customOptions:
+        - "--set-gtid-purged=OFF"  # Don't include GTID info
+
+# MySQL dump options - global defaults for all backups
+mysqlDumpOptions:
+  singleTransaction: true   # --single-transaction
+  quick: true               # --quick
+  skipLockTables: true      # --skip-lock-tables
+  skipAddLocks: true        # --skip-add-locks
+  skipComments: false       # --skip-comments
+  extendedInsert: true      # --extended-insert
+  skipExtendedInsert: false # --skip-extended-insert
+  compress: true            # --compress
+  customOptions: []         # Any additional custom options as a list
+
+# Storage configuration with organization strategies
+local:
+  enabled: true
+  backupDirectory: "/backups"
+  organizationStrategy: "combined"  # combined, server-only, or type-only
+
+s3:
+  enabled: true
+  bucket: "database-backups"
+  region: "us-east-1"
+  endpoint: "https://s3.amazonaws.com"
+  accessKey: "YOUR_ACCESS_KEY"
+  secretKey: "YOUR_SECRET_KEY"
+  prefix: "mysql-backups"
+  useSSL: true
+  skipCertValidation: false
+  organizationStrategy: "combined"  # combined, server-only, or type-only
+
+# Backup types configuration
+# You can selectively include only the backup schedules you need
+# Any schedule type not defined here (e.g., hourly, daily, weekly, monthly) will not run
+backupTypes:
+  # Hourly backups are intentionally omitted in this example.
+  # Since it's not defined, hourly backups will not run.
+  
+  # If you want hourly backups, uncomment the following section:
+  # hourly:
+  #   schedule: "0 * * * *"  # Every hour
+  #   local:
+  #     enabled: true
+  #     retention:
+  #       duration: "24h"  # Keep for 24 hours
+  #       forever: false
+  #   s3:
+  #     enabled: true
+  #     retention:
+  #       duration: "24h"
+  #       forever: false
+
+  daily:
+    schedule: "0 0 * * *"  # Every day at midnight
+    local:
+      enabled: true
+      retention:
+        duration: "168h"  # Keep for 7 days
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "168h"
+        forever: false
+
+  weekly:
+    schedule: "0 0 * * 0"  # Every Sunday at midnight
+    local:
+      enabled: true
+      retention:
+        duration: "672h"  # Keep for 4 weeks
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "672h"
+        forever: false
+
+  monthly:
+    schedule: "0 0 1 * *"  # First day of each month
+    local:
+      enabled: true
+      retention:
+        duration: "8760h"  # Keep for 1 year
+        forever: false
+    s3:
+      enabled: true
+      retention:
+        duration: "0h"
+        forever: true  # Keep forever

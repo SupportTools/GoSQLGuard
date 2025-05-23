@@ -1,0 +1,206 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gosqlguard-with-mysql
+  labels:
+    app: gosqlguard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gosqlguard
+  template:
+    metadata:
+      labels:
+        app: gosqlguard
+    spec:
+      containers:
+      # Main GoSQLGuard container
+      - name: gosqlguard
+        image: your-registry/gosqlguard:latest
+        env:
+        - name: CONFIG_PATH
+          value: "/app/config/config.yaml"
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gosqlguard-credentials
+              key: MYSQL_PASSWORD
+        - name: S3_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: gosqlguard-credentials
+              key: S3_ACCESS_KEY
+        - name: S3_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: gosqlguard-credentials
+              key: S3_SECRET_KEY
+        # Metadata database environment variables
+        - name: METADATA_DB_ENABLED
+          value: "true"
+        - name: METADATA_DB_HOST
+          value: "localhost"  # Connect to the local MySQL sidecar
+        - name: METADATA_DB_PORT
+          value: "3306"
+        - name: METADATA_DB_DATABASE
+          value: "gosqlguard_metadata"
+        - name: METADATA_DB_USERNAME
+          value: "gosqlguard"
+        - name: METADATA_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gosqlguard-credentials
+              key: METADATA_DB_PASSWORD
+        volumeMounts:
+        - name: backup-storage
+          mountPath: /backups
+        - name: config-volume
+          mountPath: /app/config
+        - name: mysql-init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+        ports:
+        - containerPort: 8080
+          name: metrics
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+      # MySQL sidecar container for metadata storage
+      - name: mysql-metadata
+        image: mysql:8.0
+        ports:
+        - containerPort: 3306
+          name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gosqlguard-credentials
+              key: MYSQL_ROOT_PASSWORD
+        - name: MYSQL_DATABASE
+          value: "gosqlguard_metadata"
+        - name: MYSQL_USER
+          value: "gosqlguard"
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gosqlguard-credentials
+              key: METADATA_DB_PASSWORD
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+        - name: mysql-init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        readinessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+            - -u
+            - root
+            - -p${MYSQL_ROOT_PASSWORD}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+            - -u
+            - root
+            - -p${MYSQL_ROOT_PASSWORD}
+          initialDelaySeconds: 60
+          periodSeconds: 20
+
+      volumes:
+      # Persistent volume for backup files
+      - name: backup-storage
+        persistentVolumeClaim:
+          claimName: gosqlguard-storage
+      
+      # Persistent volume for MySQL data
+      - name: mysql-data
+        persistentVolumeClaim:
+          claimName: gosqlguard-mysql-data
+      
+      # ConfigMap for GoSQLGuard configuration
+      - name: config-volume
+        configMap:
+          name: gosqlguard-config
+      
+      # ConfigMap for MySQL initialization scripts
+      - name: mysql-init-scripts
+        configMap:
+          name: gosqlguard-mysql-init
+---
+# PVC for MySQL data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gosqlguard-mysql-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+# PVC for backup storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gosqlguard-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+---
+# ConfigMap for MySQL initialization scripts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gosqlguard-mysql-init
+data:
+  init.sql: |
+    -- Create database if it doesn't exist
+    CREATE DATABASE IF NOT EXISTS `gosqlguard_metadata`;
+    
+    -- Create user and grant privileges
+    CREATE USER IF NOT EXISTS 'gosqlguard'@'%' IDENTIFIED BY '${METADATA_DB_PASSWORD}';
+    GRANT ALL PRIVILEGES ON `gosqlguard_metadata`.* TO 'gosqlguard'@'%';
+    FLUSH PRIVILEGES;
+    
+    -- Use the database
+    USE `gosqlguard_metadata`;
+    
+    -- Initial schema setup is handled by GoSQLGuard's auto-migrate

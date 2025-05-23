@@ -1,0 +1,201 @@
+# Default values for gosqlguard
+# This is a YAML-formatted file.
+
+replicaCount: 1
+
+image:
+  repository: supporttools/gosqlguard
+  pullPolicy: IfNotPresent
+  tag: "" # Defaults to chart appVersion
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# GoSQLGuard specific settings
+settings:
+  # Debug mode
+  debug: false
+  
+  # Admin UI configuration
+  adminUI:
+    enabled: true
+    port: 8080
+  
+  # Metrics configuration  
+  metrics:
+    enabled: true
+    port: 9090
+  
+  # Database connections - multi-server support
+  database_servers:
+    - name: "db1"
+      type: "mysql"  # mysql or postgresql
+      host: "mysql.example.com"
+      port: 3306
+      username: "backup_user"
+      password: "password"  # Will be stored in a Kubernetes secret
+      includeDatabases: ["db1", "db2", "db3"]  # List of databases to backup
+      excludeDatabases: []  # List of databases to exclude
+      # Optional server-specific MySQL dump options
+      mysqlDumpOptions:
+        singleTransaction: true    # --single-transaction
+        quick: true                # --quick
+        skipLockTables: false      # --skip-lock-tables
+  
+  # MySQL dump options - global defaults
+  mysqlDumpOptions:
+    singleTransaction: true    # --single-transaction
+    quick: true                # --quick
+    skipLockTables: false      # --skip-lock-tables
+    skipAddLocks: false        # --skip-add-locks
+    skipComments: false        # --skip-comments
+    extendedInsert: true       # --extended-insert
+    skipExtendedInsert: false  # --skip-extended-insert
+    compress: false            # --compress
+    customOptions: []          # Any additional custom options as a list
+    
+  # Backup schedules
+  backupTypes:
+    hourly:
+      schedule: "0 * * * *"  # Every hour
+      local:
+        enabled: true
+        retention:
+          duration: "24h"  # Keep backups for 24 hours
+          forever: false
+      s3:
+        enabled: false
+        retention:
+          duration: "24h"
+          forever: false
+      mysqlDumpOptions:
+        skipComments: true     # Skip SQL comments for smaller hourly backups
+    daily:
+      schedule: "0 0 * * *"  # Every day at midnight
+      local:
+        enabled: true
+        retention:
+          duration: "168h"  # 7 days
+          forever: false
+      s3:
+        enabled: false
+        retention:
+          duration: "168h"
+          forever: false
+    weekly:
+      schedule: "0 0 * * 0"  # Every Sunday at midnight
+      local:
+        enabled: true
+        retention:
+          duration: "672h"  # 4 weeks
+          forever: false
+      s3:
+        enabled: false
+        retention:
+          duration: "672h"
+          forever: false
+    monthly:
+      schedule: "0 0 1 * *"  # First day of month at midnight
+      local:
+        enabled: false
+        retention:
+          duration: "8760h"  # 12 months
+          forever: false
+      s3:
+        enabled: false
+        retention:
+          duration: "8760h"
+          forever: false
+    yearly:
+      schedule: "0 0 1 1 *"  # January 1st at midnight
+      local:
+        enabled: false
+        retention:
+          duration: "0h"
+          forever: true  # Keep forever
+      s3:
+        enabled: false
+        retention:
+          duration: "0h"
+          forever: true
+      mysqlDumpOptions:
+        skipComments: false    # Include comments for better documentation
+        compress: true         # Use compression for network transfer
+        customOptions:         # More complete dump for yearly backups
+          - "--routines"       # Include stored procedures and functions
+          - "--triggers"       # Include triggers
+          - "--events"         # Include events
+  
+  # Storage configuration
+  local:
+    enabled: true
+    backupDirectory: "/backups"
+    organizationStrategy: "combined"  # combined, server-only, or type-only
+  
+  s3:
+    enabled: false
+    endpoint: "s3.amazonaws.com"
+    bucket: "gosqlguard-backups"
+    region: "us-east-1"
+    accessKey: ""  # Will be stored in a Kubernetes secret
+    secretKey: ""  # Will be stored in a Kubernetes secret
+    prefix: "mysql"
+    useSSL: true
+    skipCertValidation: false
+    organizationStrategy: "combined"  # combined, server-only, or type-only
+
+# Persistence configuration for local backups
+persistence:
+  enabled: true
+  size: "10Gi"
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  
+# Additional persistence for metadata
+metadataPersistence:
+  enabled: true
+  size: "1Gi"
+  storageClass: ""
+  accessMode: ReadWriteOnce
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: "gosqlguard"
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+securityContext: {}
+
+service:
+  type: ClusterIP
+  adminUIPort: 8080
+  metricsPort: 9090
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Optional ingress for admin UI
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: gosqlguard.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []

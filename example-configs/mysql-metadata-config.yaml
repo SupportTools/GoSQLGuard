@@ -1,0 +1,98 @@
+# Example configuration with MySQL metadata database
+# This example shows how to configure GoSQLGuard to use a MySQL database for metadata storage
+
+# Database servers configuration
+database_servers:
+  - name: "mysql-server"
+    type: "mysql"
+    host: "localhost"
+    port: "3306"
+    username: "root"
+    password: "password"
+    includeDatabases: []  # Empty means include all
+    excludeDatabases:
+      - "information_schema"
+      - "performance_schema"
+      - "mysql"
+      - "sys"
+
+# Local backup storage
+local:
+  enabled: true
+  backupDirectory: "/backups"
+  organizationStrategy: "combined"  # Options: server-only, type-only, combined
+
+# S3 backup storage (optional)
+s3:
+  enabled: false
+  bucket: "my-backup-bucket"
+  region: "us-east-1"
+  endpoint: ""  # Set for custom S3-compatible storage
+  accessKey: "access-key"
+  secretKey: "secret-key"
+  prefix: "backups"
+  pathStyle: false
+  useSSL: true
+  organizationStrategy: "combined"  # Options: server-only, type-only, combined
+
+# MySQL metadata database configuration
+metadata_database:
+  enabled: true
+  host: "localhost"
+  port: 3306
+  username: "gosqlguard"
+  password: "metadata_password"
+  database: "gosqlguard_metadata"
+  maxOpenConns: 10
+  maxIdleConns: 5
+  connMaxLifetime: "5m"
+  autoMigrate: true  # Automatically create/update tables
+
+# Backup types and schedules
+backupTypes:
+  manual:
+    schedule: ""  # Empty means not scheduled
+    local:
+      enabled: true
+      retention:
+        duration: "90d"
+        forever: false
+    s3:
+      enabled: false
+
+  hourly:
+    schedule: "0 * * * *"  # Every hour
+    local:
+      enabled: true
+      retention:
+        duration: "24h"
+        forever: false
+    s3:
+      enabled: false
+
+  daily:
+    schedule: "0 0 * * *"  # Every day at midnight
+    local:
+      enabled: true
+      retention:
+        duration: "7d"
+        forever: false
+    s3:
+      enabled: false
+
+  weekly:
+    schedule: "0 0 * * 0"  # Every Sunday at midnight
+    local:
+      enabled: true
+      retention:
+        duration: "30d"
+        forever: false
+    s3:
+      enabled: false
+
+# Metrics server configuration
+metrics:
+  port: "8080"
+
+# Enable debug mode for verbose logging
+debug: true
