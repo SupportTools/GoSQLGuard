@@ -12,6 +12,14 @@ import (
 	"gorm.io/gorm"
 )
 
+// contextKey is a type for context keys
+type contextKey string
+
+const (
+	// startTimeKey is the context key for query start time
+	startTimeKey contextKey = "start_time"
+)
+
 // PaginatedResult represents a paginated query result
 type PaginatedResult struct {
 	Data       []types.BackupMeta `json:"data"`
@@ -494,13 +502,13 @@ func joinColumns(columns []string) string {
 // EnableQueryLogging enables slow query logging for performance monitoring
 func EnableQueryLogging(db *gorm.DB, threshold time.Duration) {
 	db.Callback().Query().After("gorm:query").Register("log_slow_queries", func(tx *gorm.DB) {
-		elapsed := time.Since(tx.Statement.Context.Value("start_time").(time.Time))
+		elapsed := time.Since(tx.Statement.Context.Value(startTimeKey).(time.Time))
 		if elapsed > threshold {
 			log.Printf("Slow query detected (%.3fs): %s", elapsed.Seconds(), tx.Statement.SQL.String())
 		}
 	})
 
 	db.Callback().Query().Before("gorm:query").Register("set_query_start_time", func(tx *gorm.DB) {
-		tx.Statement.Context = context.WithValue(tx.Statement.Context, "start_time", time.Now())
+		tx.Statement.Context = context.WithValue(tx.Statement.Context, startTimeKey, time.Now())
 	})
 }

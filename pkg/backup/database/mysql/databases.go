@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql" // MySQL driver
 	"github.com/supporttools/GoSQLGuard/pkg/config"
 )
 

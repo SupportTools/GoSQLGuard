@@ -1,4 +1,4 @@
-// pkg/config/config.go
+// Package config provides configuration loading and management for GoSQLGuard
 package config
 
 import (

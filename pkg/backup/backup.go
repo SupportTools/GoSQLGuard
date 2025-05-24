@@ -27,6 +27,14 @@ import (
 	"github.com/supporttools/GoSQLGuard/pkg/storage/s3"
 )
 
+// contextKey is a type for context keys to avoid collisions
+type contextKey string
+
+const (
+	// backupTypeKey is the context key for backup type
+	backupTypeKey contextKey = "backupType"
+)
+
 // BackupOptions defines options for a backup operation
 type BackupOptions struct {
 	Servers   []string // List of server names to back up, empty means all servers
@@ -533,7 +541,7 @@ func (m *Manager) backupDatabase(serverName, serverType, database, backupType st
 	}
 
 	// Create context with backup type
-	ctx := context.WithValue(context.Background(), "backupType", backupType)
+	ctx := context.WithValue(context.Background(), backupTypeKey, backupType)
 
 	// Define backup options
 	backupOpts := common.BackupOptions{
