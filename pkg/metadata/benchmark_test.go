@@ -147,18 +147,18 @@ func createBenchmarkStore(size int) *Store {
 	// Generate test data
 	servers := []string{"server1", "server2", "server3", "server4", "server5"}
 	databases := []string{"testdb", "proddb", "userdb", "orderdb", "logdb"}
-	types := []string{"hourly", "daily", "weekly", "monthly", "manual"}
+	backupTypes := []string{"hourly", "daily", "weekly", "monthly", "manual"}
 	statuses := []types.BackupStatus{StatusSuccess, StatusError, StatusPending}
 	
 	baseTime := time.Now().Add(-30 * 24 * time.Hour) // Start 30 days ago
 	
 	for i := 0; i < size; i++ {
 		backup := types.BackupMeta{
-			ID:          fmt.Sprintf("%s-%s-%s-%d", servers[i%5], databases[i%5], types[i%5], i),
+			ID:          fmt.Sprintf("%s-%s-%s-%d", servers[i%5], databases[i%5], backupTypes[i%5], i),
 			ServerName:  servers[i%5],
 			ServerType:  "mysql",
 			Database:    databases[i%5],
-			BackupType:  types[i%5],
+			BackupType:  backupTypes[i%5],
 			CreatedAt:   baseTime.Add(time.Duration(i) * time.Minute),
 			CompletedAt: baseTime.Add(time.Duration(i)*time.Minute + 5*time.Minute),
 			Size:        int64(1024 * 1024 * (i%100 + 1)), // 1MB to 100MB

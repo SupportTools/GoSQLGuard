@@ -3,7 +3,6 @@ package dbconfig
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/google/uuid"

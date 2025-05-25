@@ -129,7 +129,7 @@ func TestFileStorePartialWrite(t *testing.T) {
 	}
 
 	// Add backup and save
-	backup := store.CreateBackupMeta("server1", "mysql", "testdb", "daily")
+	_ = store.CreateBackupMeta("server1", "mysql", "testdb", "daily")
 	err = store.Save()
 	require.NoError(t, err)
 

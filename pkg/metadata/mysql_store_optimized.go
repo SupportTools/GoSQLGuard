@@ -7,7 +7,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/supporttools/GoSQLGuard/pkg/config"
 	"github.com/supporttools/GoSQLGuard/pkg/metadata/types"
 	"gorm.io/gorm"
 )

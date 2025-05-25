@@ -20,16 +20,12 @@ func TestMySQLStoreInitialization(t *testing.T) {
 	// For now, we'll test the basic structure
 	
 	dbStore := &DBStore{
-		cache: MetadataStore{
-			Backups:     make([]types.BackupMeta, 0),
-			Version:     "1.0",
-			LastUpdated: time.Now(),
-		},
+		db:          nil, // Would be a mock in real test
+		initialized: true,
 	}
 
 	assert.NotNil(t, dbStore)
-	assert.Equal(t, "1.0", dbStore.cache.Version)
-	assert.Equal(t, 0, len(dbStore.cache.Backups))
+	assert.True(t, dbStore.initialized)
 }
 
 // TestMySQLStoreMockOperations tests MySQL operations with mocked database
@@ -49,12 +45,8 @@ func TestMySQLStoreMockOperations(t *testing.T) {
 
 	// Create DBStore
 	dbStore := &DBStore{
-		db: db,
-		cache: MetadataStore{
-			Backups:     make([]types.BackupMeta, 0),
-			Version:     "1.0",
-			LastUpdated: time.Now(),
-		},
+		db:          db,
+		initialized: true,
 	}
 
 	// Test CreateBackupMeta
@@ -76,30 +68,11 @@ func TestMySQLStoreMockOperations(t *testing.T) {
 	mock.ExpectCommit()
 
 	// Note: In real implementation, we'd need to handle the complex GORM queries
-	// For now, we'll test the cache update
 	err = dbStore.UpdateBackupStatus(backupID, types.StatusSuccess, map[string]string{"local": "/backup1"}, 1024, "")
 	
-	// Since we're mocking, we'll manually update the cache for testing
-	for i, b := range dbStore.cache.Backups {
-		if b.ID == backupID {
-			dbStore.cache.Backups[i].Status = types.StatusSuccess
-			dbStore.cache.Backups[i].Size = 1024
-			dbStore.cache.Backups[i].LocalPaths = map[string]string{"local": "/backup1"}
-			break
-		}
-	}
-
-	// Verify the update
-	found := false
-	for _, b := range dbStore.cache.Backups {
-		if b.ID == backupID {
-			assert.Equal(t, types.StatusSuccess, b.Status)
-			assert.Equal(t, int64(1024), b.Size)
-			found = true
-			break
-		}
-	}
-	assert.True(t, found)
+	// In a real test with a database, we would query to verify the update
+	// For this mock test, we just ensure no error occurred
+	assert.NoError(t, err)
 }
 
 // TestMySQLStoreMigration tests migration from file to database
