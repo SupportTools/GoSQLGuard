@@ -18,10 +18,10 @@ func NewBackupsHandler() *BackupsHandler {
 	return &BackupsHandler{}
 }
 
-// RegisterRoutes registers the backup API routes
-func (h *BackupsHandler) RegisterRoutes() {
-	http.HandleFunc("/api/backups", h.handleBackups)
-	http.HandleFunc("/api/backups/stats", h.handleBackupStats)
+// RegisterRoutes registers the backup API routes on the provided mux
+func (h *BackupsHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/backups", h.handleBackups)
+	mux.HandleFunc("/api/backups/stats", h.handleBackupStats)
 }
 
 // handleBackups handles paginated backup queries

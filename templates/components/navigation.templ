@@ -1,0 +1,29 @@
+package components
+
+import "github.com/supporttools/GoSQLGuard/templates/types"
+
+templ Navigation(links []types.NavLink) {
+	<nav class="navbar navbar-expand-lg navbar-light bg-light rounded">
+		<div class="container-fluid">
+			<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavAltMarkup">
+				<span class="navbar-toggler-icon"></span>
+			</button>
+			<div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+				<div class="navbar-nav">
+					for _, link := range links {
+						<a 
+							class={ "nav-link", templ.KV("active", link.Active), templ.KV("text-primary", link.External) }
+							href={ templ.URL(link.URL) }
+							if link.External {
+								target="_blank"
+								rel="noopener noreferrer"
+							}
+						>
+							<i data-feather={ link.Icon }></i> { link.Name }
+						</a>
+					}
+				</div>
+			</div>
+		</div>
+	</nav>
+}

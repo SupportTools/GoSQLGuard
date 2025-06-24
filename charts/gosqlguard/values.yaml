@@ -25,7 +25,7 @@ settings:
   # Metrics configuration  
   metrics:
     enabled: true
-    port: 9090
+    port: 8080
   
   # Database connections - multi-server support
   database_servers:
@@ -144,6 +144,19 @@ settings:
     useSSL: true
     skipCertValidation: false
     organizationStrategy: "combined"  # combined, server-only, or type-only
+  
+  # Metadata database configuration
+  metadata_database:
+    enabled: true
+    host: "gosqlguard-mysql"
+    port: 3306
+    username: "gosqlguard"
+    password: "changeme"  # Will be stored in a Kubernetes secret
+    database: "gosqlguard_metadata"
+    maxOpenConns: 10
+    maxIdleConns: 5
+    connMaxLifetime: "5m"
+    autoMigrate: true
 
 # Persistence configuration for local backups
 persistence:
@@ -158,6 +171,26 @@ metadataPersistence:
   size: "1Gi"
   storageClass: ""
   accessMode: ReadWriteOnce
+
+# MySQL subchart configuration
+mysql:
+  enabled: true
+  auth:
+    rootPassword: "changeme"
+    database: "gosqlguard_metadata"
+    username: "gosqlguard"
+    password: "changeme"
+  primary:
+    persistence:
+      enabled: true
+      size: "8Gi"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
 
 serviceAccount:
   create: true

@@ -1,0 +1,287 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gosqlguard
+  namespace: backup-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gosqlguard
+  template:
+    metadata:
+      labels:
+        app: gosqlguard
+    spec:
+      serviceAccountName: gosqlguard
+      containers:
+      # Main GoSQLGuard container
+      - name: gosqlguard
+        image: supporttools/gosqlguard:latest
+        imagePullPolicy: Always
+        env:
+        - name: CONFIG_SOURCE
+          value: "mysql"
+        - name: CONFIG_MYSQL_HOST
+          value: "localhost"  # Sidecar container
+        - name: CONFIG_MYSQL_PORT
+          value: "3306"
+        - name: CONFIG_MYSQL_DATABASE
+          value: "gosqlguard_config"
+        - name: CONFIG_MYSQL_USER
+          value: "gosqlguard"
+        - name: CONFIG_MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gosqlguard-config-mysql
+              key: password
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        volumeMounts:
+        - name: backup-storage
+          mountPath: /backups
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+      # MySQL sidecar for configuration
+      - name: config-mysql
+        image: mysql:8.0
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gosqlguard-config-mysql
+              key: root-password
+        - name: MYSQL_DATABASE
+          value: "gosqlguard_config"
+        - name: MYSQL_USER
+          value: "gosqlguard"
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gosqlguard-config-mysql
+              key: password
+        ports:
+        - name: mysql
+          containerPort: 3306
+          protocol: TCP
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+        - name: mysql-init
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - mysql
+            - -h
+            - localhost
+            - -u
+            - gosqlguard
+            - -p$(MYSQL_PASSWORD)
+            - -e
+            - "SELECT 1"
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+      volumes:
+      - name: backup-storage
+        persistentVolumeClaim:
+          claimName: gosqlguard-backups
+      - name: mysql-data
+        persistentVolumeClaim:
+          claimName: gosqlguard-config-mysql
+      - name: mysql-init
+        configMap:
+          name: gosqlguard-mysql-init
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gosqlguard-config-mysql
+  namespace: backup-system
+type: Opaque
+stringData:
+  root-password: "changeme-root-password"
+  password: "changeme-user-password"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gosqlguard-mysql-init
+  namespace: backup-system
+data:
+  01-config-schema.sql: |
+    -- GoSQLGuard Configuration Database Schema
+    -- This database stores all configuration for GoSQLGuard in a MySQL sidecar
+
+    CREATE DATABASE IF NOT EXISTS gosqlguard_config;
+    USE gosqlguard_config;
+
+    -- Global configuration settings
+    CREATE TABLE IF NOT EXISTS global_config (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        `key` VARCHAR(255) UNIQUE NOT NULL,
+        `value` TEXT,
+        `type` ENUM('string', 'boolean', 'integer', 'json') DEFAULT 'string',
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_key (`key`)
+    );
+
+    -- Database servers configuration
+    CREATE TABLE IF NOT EXISTS database_servers (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        name VARCHAR(255) UNIQUE NOT NULL,
+        type ENUM('mysql', 'postgresql') NOT NULL,
+        host VARCHAR(255) NOT NULL,
+        port INT NOT NULL,
+        username VARCHAR(255),
+        password VARCHAR(255),
+        auth_plugin VARCHAR(50),
+        enabled BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_name (name),
+        INDEX idx_enabled (enabled)
+    );
+
+    -- Database inclusion/exclusion rules
+    CREATE TABLE IF NOT EXISTS database_filters (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        server_id INT NOT NULL,
+        filter_type ENUM('include', 'exclude') NOT NULL,
+        database_name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (server_id) REFERENCES database_servers(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_server_filter (server_id, filter_type, database_name),
+        INDEX idx_server_id (server_id)
+    );
+
+    -- Storage configurations
+    CREATE TABLE IF NOT EXISTS storage_configs (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        name VARCHAR(255) UNIQUE NOT NULL,
+        type ENUM('local', 's3') NOT NULL,
+        enabled BOOLEAN DEFAULT TRUE,
+        config JSON NOT NULL COMMENT 'JSON configuration specific to storage type',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_name (name),
+        INDEX idx_type (type),
+        INDEX idx_enabled (enabled)
+    );
+
+    -- Backup schedules
+    CREATE TABLE IF NOT EXISTS backup_schedules (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        name VARCHAR(255) UNIQUE NOT NULL,
+        backup_type VARCHAR(50) NOT NULL,
+        cron_expression VARCHAR(255) NOT NULL,
+        enabled BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_name (name),
+        INDEX idx_enabled (enabled)
+    );
+
+    -- Retention policies
+    CREATE TABLE IF NOT EXISTS retention_policies (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        schedule_id INT NOT NULL,
+        storage_id INT NOT NULL,
+        retention_duration VARCHAR(50) COMMENT 'Duration in Go format (e.g., 24h, 168h)',
+        keep_forever BOOLEAN DEFAULT FALSE,
+        enabled BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (schedule_id) REFERENCES backup_schedules(id) ON DELETE CASCADE,
+        FOREIGN KEY (storage_id) REFERENCES storage_configs(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_schedule_storage (schedule_id, storage_id),
+        INDEX idx_schedule_id (schedule_id),
+        INDEX idx_storage_id (storage_id)
+    );
+
+  02-default-data.sql: |
+    -- Default configuration data for GoSQLGuard
+    USE gosqlguard_config;
+
+    -- Insert global configuration
+    INSERT INTO global_config (`key`, `value`, `type`, description) VALUES
+    ('debug', 'false', 'boolean', 'Enable debug mode'),
+    ('metrics_port', '8080', 'string', 'Port for metrics and admin UI'),
+    ('config_version', '1.0', 'string', 'Configuration version');
+
+    -- Insert default storage configurations
+    INSERT INTO storage_configs (name, type, enabled, config) VALUES
+    ('local-storage', 'local', TRUE, JSON_OBJECT(
+        'backupDirectory', '/backups',
+        'organizationStrategy', 'combined'
+    ));
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gosqlguard-config-mysql
+  namespace: backup-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gosqlguard
+  namespace: backup-system
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: gosqlguard

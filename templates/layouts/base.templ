@@ -1,0 +1,117 @@
+package layouts
+
+import (
+	"github.com/supporttools/GoSQLGuard/templates/types"
+	"github.com/supporttools/GoSQLGuard/templates/components"
+)
+
+templ Base(data types.PageData) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>{ data.Title } - { data.AppName }</title>
+		<meta name="description" content={ data.Description }/>
+		
+		// Bootstrap CSS
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
+		// Feather Icons
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.css"/>
+		// HTMX
+		<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+		// HTMX Extensions
+		<script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
+		<script src="https://unpkg.com/htmx.org/dist/ext/loading-states.js"></script>
+		
+		<style>
+			body {
+				padding-top: 20px;
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+			}
+			.navbar {
+				margin-bottom: 20px;
+			}
+			.nav-link .feather {
+				width: 16px;
+				height: 16px;
+				margin-right: 4px;
+			}
+			.card {
+				margin-bottom: 20px;
+			}
+			.bg-success-light {
+				background-color: rgba(40, 167, 69, 0.1);
+			}
+			.bg-danger-light {
+				background-color: rgba(220, 53, 69, 0.1);
+			}
+			.bg-info-light {
+				background-color: rgba(23, 162, 184, 0.1);
+			}
+			.bg-warning-light {
+				background-color: rgba(255, 193, 7, 0.1);
+			}
+			.status-badge {
+				font-size: 0.8rem;
+				padding: 0.25rem 0.5rem;
+			}
+			footer {
+				margin-top: 3rem;
+				padding: 1.5rem 0;
+				border-top: 1px solid #e9ecef;
+				color: #6c757d;
+				font-size: 0.9rem;
+			}
+			// HTMX loading indicators
+			.htmx-indicator {
+				display: none;
+			}
+			.htmx-request .htmx-indicator {
+				display: inline;
+			}
+			.htmx-request.htmx-indicator {
+				display: inline;
+			}
+		</style>
+	</head>
+	<body hx-ext="loading-states">
+		<div class="container">
+			<header class="pb-3 mb-4 border-bottom">
+				<a href="/" class="d-flex align-items-center text-dark text-decoration-none">
+					<span class="fs-4">{ data.AppName }</span>
+				</a>
+			</header>
+
+			@components.Navigation(data.NavLinks)
+
+			<main class="mt-4" id="main-content">
+				<h1>{ data.Title }</h1>
+				<p class="lead">{ data.Description }</p>
+				
+				{ children... }
+			</main>
+
+			<footer class="text-center">
+				<div>{ data.AppName } { data.Version }</div>
+				<div class="text-muted">Page rendered at { data.Time }</div>
+			</footer>
+		</div>
+
+		// Bootstrap JS
+		<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+		// Feather Icons
+		<script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+		<script>
+			document.addEventListener('DOMContentLoaded', () => {
+				feather.replace();
+				
+				// Re-initialize feather icons after HTMX swaps
+				document.body.addEventListener('htmx:afterSwap', () => {
+					feather.replace();
+				});
+			});
+		</script>
+	</body>
+	</html>
+}

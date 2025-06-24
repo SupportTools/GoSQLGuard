@@ -2,10 +2,8 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -24,7 +22,6 @@ import (
 
 var (
 	// Flags
-	configFile   = flag.String("config", "config.yaml", "Path to GoSQLGuard configuration file")
 	outputFile   = flag.String("output", "", "Output file for recovered metadata (default: auto-detect from config)")
 	dryRun       = flag.Bool("dry-run", false, "Perform a dry run without writing metadata")
 	verbose      = flag.Bool("verbose", false, "Enable verbose logging")
@@ -56,10 +53,8 @@ type RecoveredBackup struct {
 func main() {
 	flag.Parse()
 
-	// Load configuration
-	if err := config.LoadConfig(*configFile); err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
+	// Load configuration from MySQL
+	config.LoadConfiguration()
 
 	// Initialize metadata system
 	if err := metadata.Initialize(); err != nil {
@@ -180,7 +175,7 @@ func scanS3Storage() []RecoveredBackup {
 			"",
 		),
 		Endpoint:         aws.String(config.CFG.S3.Endpoint),
-		S3ForcePathStyle: aws.Bool(config.CFG.S3.ForcePathStyle),
+		S3ForcePathStyle: aws.Bool(config.CFG.S3.PathStyle),
 	})
 	if err != nil {
 		log.Printf("Failed to create S3 session: %v", err)

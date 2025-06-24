@@ -8,43 +8,50 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/supporttools/GoSQLGuard/pkg/config"
-	"github.com/supporttools/GoSQLGuard/pkg/database/metadata"
+	dbmeta "github.com/supporttools/GoSQLGuard/pkg/database/metadata"
+	"github.com/supporttools/GoSQLGuard/pkg/metadata"
+	"github.com/supporttools/GoSQLGuard/pkg/scheduler"
 )
 
 // ScheduleHandler handles schedule management API endpoints
 type ScheduleHandler struct {
-	scheduleRepo *metadata.ScheduleRepository
+	scheduleRepo *dbmeta.ScheduleRepository
+	scheduler    *scheduler.Scheduler
 }
 
 // NewScheduleHandler creates a new schedule handler
-func NewScheduleHandler() *ScheduleHandler {
+func NewScheduleHandler(sched *scheduler.Scheduler) *ScheduleHandler {
 	if metadata.DB == nil {
 		log.Println("Warning: Database is not initialized, schedule management API will not work")
-		return &ScheduleHandler{}
+		return &ScheduleHandler{scheduler: sched}
 	}
 
 	return &ScheduleHandler{
-		scheduleRepo: metadata.NewScheduleRepository(metadata.DB),
+		scheduleRepo: dbmeta.NewScheduleRepository(metadata.DB),
+		scheduler:    sched,
 	}
 }
 
-// RegisterRoutes registers the schedule API routes
-func (h *ScheduleHandler) RegisterRoutes() {
-	http.HandleFunc("/api/schedules", h.handleSchedules)
-	http.HandleFunc("/api/schedules/delete", h.handleDeleteSchedule)
+// RegisterRoutes registers the schedule API routes on the provided mux
+func (h *ScheduleHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/schedules", h.handleSchedules)
+	mux.HandleFunc("/api/schedules/delete", h.handleDeleteSchedule)
 }
 
 // handleSchedules handles GET and POST requests for schedule management
 func (h *ScheduleHandler) handleSchedules(w http.ResponseWriter, r *http.Request) {
-	if h.scheduleRepo == nil {
-		http.Error(w, "Schedule management is not available: database not initialized", http.StatusServiceUnavailable)
-		return
-	}
-
 	switch r.Method {
 	case http.MethodGet:
+		if h.scheduleRepo == nil {
+			http.Error(w, "Schedule management is not available: database not initialized", http.StatusServiceUnavailable)
+			return
+		}
 		h.getSchedules(w, r)
 	case http.MethodPost:
+		if h.scheduleRepo == nil {
+			http.Error(w, "Schedule management is not available: database not initialized", http.StatusServiceUnavailable)
+			return
+		}
 		h.createOrUpdateSchedule(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -126,7 +133,7 @@ type storageResponse struct {
 }
 
 // convertScheduleToResponse converts a BackupSchedule to a scheduleResponse
-func convertScheduleToResponse(schedule *metadata.BackupSchedule) scheduleResponse {
+func convertScheduleToResponse(schedule *dbmeta.BackupSchedule) scheduleResponse {
 	resp := scheduleResponse{
 		ID:             schedule.ID,
 		Name:           schedule.Name,
@@ -179,7 +186,7 @@ func (h *ScheduleHandler) createOrUpdateSchedule(w http.ResponseWriter, r *http.
 	}
 
 	// Create the schedule
-	schedule := metadata.BackupSchedule{
+	schedule := dbmeta.BackupSchedule{
 		Name:           req.Name,
 		BackupType:     req.BackupType,
 		CronExpression: req.CronExpression,
@@ -208,7 +215,7 @@ func (h *ScheduleHandler) createOrUpdateSchedule(w http.ResponseWriter, r *http.
 
 	// Add retention policies
 	if req.LocalStorage.Enabled {
-		schedule.RetentionPolicies = append(schedule.RetentionPolicies, metadata.ScheduleRetentionPolicy{
+		schedule.RetentionPolicies = append(schedule.RetentionPolicies, dbmeta.ScheduleRetentionPolicy{
 			ScheduleID:   schedule.ID,
 			StorageType:  "local",
 			Duration:     req.LocalStorage.Duration,
@@ -218,7 +225,7 @@ func (h *ScheduleHandler) createOrUpdateSchedule(w http.ResponseWriter, r *http.
 	}
 
 	if req.S3Storage.Enabled {
-		schedule.RetentionPolicies = append(schedule.RetentionPolicies, metadata.ScheduleRetentionPolicy{
+		schedule.RetentionPolicies = append(schedule.RetentionPolicies, dbmeta.ScheduleRetentionPolicy{
 			ScheduleID:   schedule.ID,
 			StorageType:  "s3",
 			Duration:     req.S3Storage.Duration,
@@ -240,7 +247,7 @@ func (h *ScheduleHandler) createOrUpdateSchedule(w http.ResponseWriter, r *http.
 	}
 
 	// Update global configuration by reloading database schedules
-	go reloadSchedulesFromDatabase()
+	go h.reloadSchedulesFromDatabase()
 
 	// Return the schedule
 	response := convertScheduleToResponse(&schedule)
@@ -250,11 +257,6 @@ func (h *ScheduleHandler) createOrUpdateSchedule(w http.ResponseWriter, r *http.
 
 // handleDeleteSchedule handles deleting a schedule
 func (h *ScheduleHandler) handleDeleteSchedule(w http.ResponseWriter, r *http.Request) {
-	if h.scheduleRepo == nil {
-		http.Error(w, "Schedule management is not available: database not initialized", http.StatusServiceUnavailable)
-		return
-	}
-
 	// Only allow POST method
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -265,6 +267,11 @@ func (h *ScheduleHandler) handleDeleteSchedule(w http.ResponseWriter, r *http.Re
 	scheduleID := r.URL.Query().Get("id")
 	if scheduleID == "" {
 		http.Error(w, "Schedule ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if h.scheduleRepo == nil {
+		http.Error(w, "Schedule management is not available: database not initialized", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -287,7 +294,7 @@ func (h *ScheduleHandler) handleDeleteSchedule(w http.ResponseWriter, r *http.Re
 	}
 
 	// Update global configuration by reloading database schedules
-	go reloadSchedulesFromDatabase()
+	go h.reloadSchedulesFromDatabase()
 
 	// Return success
 	w.Header().Set("Content-Type", "application/json")
@@ -298,14 +305,17 @@ func (h *ScheduleHandler) handleDeleteSchedule(w http.ResponseWriter, r *http.Re
 }
 
 // reloadSchedulesFromDatabase reloads schedule configurations from the database
-func reloadSchedulesFromDatabase() {
+func (h *ScheduleHandler) reloadSchedulesFromDatabase() {
 	if metadata.DB == nil {
 		log.Println("Cannot reload configuration: database not initialized")
 		return
 	}
 
-	// Initialize schedule repository
-	scheduleRepo := metadata.NewScheduleRepository(metadata.DB)
+	// Use the handler's schedule repository
+	scheduleRepo := h.scheduleRepo
+	if scheduleRepo == nil {
+		scheduleRepo = dbmeta.NewScheduleRepository(metadata.DB)
+	}
 
 	// Get all schedules from the database
 	schedules, err := scheduleRepo.GetAllSchedules()
@@ -360,6 +370,13 @@ func reloadSchedulesFromDatabase() {
 
 	// Critical section: update the global configuration
 	config.CFG.BackupTypes = backupTypes
+
+	// Reload the scheduler with new configuration
+	if h.scheduler != nil {
+		if err := h.scheduler.ReloadSchedules(); err != nil {
+			log.Printf("Failed to reload scheduler: %v", err)
+		}
+	}
 
 	log.Printf("Successfully loaded %d schedule configurations from the database", len(schedules))
 }

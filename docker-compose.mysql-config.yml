@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  # Configuration MySQL database
+  config-mysql:
+    image: mysql:8.0
+    container_name: gosqlguard-config-mysql
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: config_root_password
+      MYSQL_DATABASE: gosqlguard_config
+      MYSQL_USER: gosqlguard
+      MYSQL_PASSWORD: config_password
+    ports:
+      - "3308:3306"  # Different port to avoid conflicts
+    volumes:
+      - config_mysql_data:/var/lib/mysql
+      - ./deployments/mysql-sidecar/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - gosqlguard_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # GoSQLGuard with MySQL configuration
+  gosqlguard-mysql-config:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gosqlguard-controller-mysql
+    restart: unless-stopped
+    depends_on:
+      config-mysql:
+        condition: service_healthy
+      mysql-service:
+        condition: service_healthy
+      postgres-service:
+        condition: service_healthy
+      minio-setup:
+        condition: service_completed_successfully
+    environment:
+      DEBUG: "true"
+      CONFIG_SOURCE: "mysql"
+      CONFIG_MYSQL_HOST: config-mysql
+      CONFIG_MYSQL_PORT: "3306"
+      CONFIG_MYSQL_DATABASE: gosqlguard_config
+      CONFIG_MYSQL_USER: gosqlguard
+      CONFIG_MYSQL_PASSWORD: config_password
+    volumes:
+      - gosqlguard_backups:/backups
+      - gosqlguard_metadata:/app/metadata
+    ports:
+      - "8889:8080"  # Different port for this instance
+    networks:
+      - gosqlguard_network
+
+  # MySQL Service (target for backups)
+  mysql-service:
+    extends:
+      file: docker-compose.yml
+      service: mysql-service
+    networks:
+      - gosqlguard_network
+
+  # PostgreSQL Service (target for backups)
+  postgres-service:
+    extends:
+      file: docker-compose.yml
+      service: postgres-service
+    networks:
+      - gosqlguard_network
+
+  # MinIO (S3-compatible storage)
+  minio:
+    extends:
+      file: docker-compose.yml
+      service: minio
+    networks:
+      - gosqlguard_network
+
+  # MinIO setup
+  minio-setup:
+    extends:
+      file: docker-compose.yml
+      service: minio-setup
+    networks:
+      - gosqlguard_network
+
+  # Configuration management UI (optional)
+  config-ui:
+    image: phpmyadmin:latest
+    container_name: gosqlguard-config-ui
+    restart: unless-stopped
+    depends_on:
+      config-mysql:
+        condition: service_healthy
+    environment:
+      PMA_HOST: config-mysql
+      PMA_USER: gosqlguard
+      PMA_PASSWORD: config_password
+      PMA_ARBITRARY: 0
+    ports:
+      - "8890:80"
+    networks:
+      - gosqlguard_network
+
+volumes:
+  config_mysql_data:
+  mysql_data:
+  postgres_data:
+  minio_data:
+  gosqlguard_backups:
+  gosqlguard_metadata:
+
+networks:
+  gosqlguard_network:
+    driver: bridge

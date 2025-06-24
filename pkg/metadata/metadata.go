@@ -54,6 +54,18 @@ type Store struct {
 // DefaultStore is the global metadata store instance
 var DefaultStore types.MetadataStore
 
+// GetActiveStore returns the currently active metadata store
+// It returns the MySQL-backed store if available, otherwise the file-based store
+func GetActiveStore() types.MetadataStore {
+	// If we have a DBStore in DefaultStore, use it
+	if DefaultStore != nil {
+		return DefaultStore
+	}
+	
+	// No store available
+	return nil
+}
+
 // Initialize creates and initializes the metadata store
 func Initialize() error {
 	if DefaultStore != nil {

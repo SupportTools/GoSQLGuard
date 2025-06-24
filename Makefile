@@ -29,7 +29,7 @@ LDFLAGS := -X github.com/supporttools/GoSQLGuard/pkg/version.Version=$(VERSION) 
            -X github.com/supporttools/GoSQLGuard/pkg/version.GitCommit=$(GIT_COMMIT) \
            -X github.com/supporttools/GoSQLGuard/pkg/version.BuildDate=$(BUILD_DATE)
 
-.PHONY: help build build-go build-recovery push release clean increment-rc test
+.PHONY: help build build-go build-recovery push release clean increment-rc test templ templ-watch
 
 # Default target
 help:
@@ -44,13 +44,26 @@ help:
 	@echo "  test         - Run tests"
 	@echo "  clean        - Remove build artifacts"
 	@echo "  increment-rc - Increment RC number without building"
+	@echo "  templ        - Generate Templ templates"
+	@echo "  templ-watch  - Watch and regenerate templates on changes"
 	@echo ""
 	@echo "Current version: $(VERSION)"
 	@echo "Current RC: $(RC_NUMBER)"
 	@echo "Next RC will be: $(NEXT_RC)"
 
+# Generate Templ templates
+templ:
+	@echo "Generating Templ templates..."
+	@$(shell go env GOPATH)/bin/templ generate
+	@echo "Templates generated"
+
+# Watch and regenerate Templ templates on changes
+templ-watch:
+	@echo "Watching Templ templates for changes..."
+	@$(shell go env GOPATH)/bin/templ generate --watch
+
 # Build GoSQLGuard binary
-build-go:
+build-go: templ
 	@echo "Building GoSQLGuard binary..."
 	go build -ldflags "$(LDFLAGS)" -o gosqlguard main.go
 	@echo "Binary built: gosqlguard"

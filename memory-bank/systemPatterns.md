@@ -8,17 +8,23 @@ GoSQLGuard follows a modular architecture with clearly defined components that w
 
 ```mermaid
 flowchart TD
-    Config[Configuration Manager] --> Scheduler
+    Config[Configuration Manager] --> MetadataStore
+    Config --> Scheduler
     Config --> Storage
     Config --> BackupManager
     
+    MetadataStore[MySQL Metadata Store] --> Config
+    MetadataStore --> AdminServer
+    
     Scheduler[Scheduler] --> BackupManager[Backup Manager]
+    Scheduler --> MetadataStore
     BackupManager --> Storage[Storage Providers]
-    BackupManager --> MetadataStore[Metadata Store]
+    BackupManager --> MetadataStore
     
     AdminServer[Admin Server] --> BackupManager
     AdminServer --> MetadataStore
     AdminServer --> Scheduler
+    AdminServer --> Config
     
     MetricsServer[Metrics Server] --> BackupManager
     MetricsServer --> Scheduler
@@ -29,14 +35,18 @@ flowchart TD
 ```
 
 1. **Configuration Manager**
-   - Loads configuration from YAML files and environment variables
-   - Validates configuration settings for consistency
-   - Provides access to configuration throughout the application
+   - Loads basic configuration from environment variables only
+   - Connects to MySQL metadata database for dynamic configuration
+   - Loads server definitions, schedules, and options from database
+   - Supports dynamic reloading without restart
+   - No longer uses YAML configuration files
 
 2. **Scheduler**
-   - Manages scheduled backup jobs using cron expressions
+   - Manages scheduled backup jobs using cron expressions from database
+   - Dynamically reloads schedules when changed in database
    - Handles job queuing and execution
    - Maintains schedule state across restarts
+   - Fixed hourly schedules to run at top of hour (0 * * * *)
 
 3. **Backup Manager**
    - Coordinates the backup process
@@ -50,15 +60,19 @@ flowchart TD
    - Manage retention policies for their respective storage types
 
 5. **Metadata Store**
-   - Maintains records of all backup operations
+   - Maintains records of all backup operations in MySQL database
+   - Stores configuration data (servers, schedules, options)
    - Tracks backup status, size, location, and other metadata
    - Supports querying and filtering of backup records
-   - Persists metadata between system restarts
+   - Provides repository pattern for data access
+   - Enables dynamic configuration management
 
 6. **Admin Server**
    - Provides web-based interface for monitoring and management
    - Exposes API endpoints for backup operations
    - Renders status dashboards and backup history
+   - Enables configuration editing through UI (schedules, options)
+   - Real-time configuration updates without restart
 
 7. **Metrics Server**
    - Exposes Prometheus-compatible metrics
@@ -110,9 +124,11 @@ flowchart TD
 ## Component Relationships
 
 ### Configuration Flow
-- Config is loaded at startup from files and environment
-- Components receive their configuration during initialization
-- Dynamic reconfiguration is not supported; restart required for config changes
+- Basic config is loaded at startup from environment variables
+- Dynamic configuration is loaded from MySQL metadata database
+- Components can reload configuration on-demand
+- Dynamic reconfiguration is fully supported without restart
+- UI changes to configuration take effect immediately
 
 ### Backup Process Flow
 ```mermaid
@@ -176,6 +192,7 @@ sequenceDiagram
 1. **Repository Pattern**
    - Used for storage abstraction
    - Provides uniform access to different storage backends
+   - Applied to metadata store for configuration and backup data
 
 2. **Factory Pattern**
    - Creating appropriate storage providers based on configuration
@@ -184,6 +201,7 @@ sequenceDiagram
 3. **Observer Pattern**
    - Metrics system observes backup operations
    - UI updates based on state changes
+   - Scheduler observes configuration changes in database
 
 4. **Strategy Pattern**
    - Different storage backends implement the same interface
@@ -195,3 +213,8 @@ sequenceDiagram
 6. **Singleton Pattern**
    - Configuration manager is a singleton
    - Metadata store is a singleton
+
+7. **Active Record Pattern**
+   - Configuration entities (servers, schedules) loaded from database
+   - Changes persisted immediately to database
+   - Enables dynamic configuration management

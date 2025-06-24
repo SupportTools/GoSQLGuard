@@ -31,6 +31,14 @@
 - ✅ Metadata integration with backup manager
 - ✅ Metadata integration with storage providers
 - ✅ Metadata persistence to disk
+- ✅ Database-driven configuration system (replaced file-based config)
+- ✅ Removed ConfigMap from Helm deployment
+- ✅ Environment variable based configuration
+- ✅ MySQL metadata database for servers and schedules
+- ✅ Dynamic schedule reloading from database
+- ✅ Schedule editing through UI with immediate effect
+- ✅ Fixed hourly backup schedule (0 * * * *)
+- ✅ Database connection pooling and optimization
 
 ## What's Left to Build
 
@@ -62,21 +70,22 @@
 ## Current Status
 
 ### System Status
-- **Core System**: Functioning with basic features
-- **Metadata System**: Recently integrated, requires further testing
-- **Admin UI**: Working with recent fixes for rendering issues
+- **Core System**: Functioning with database-driven configuration
+- **Metadata System**: Fully integrated with MySQL backend
+- **Admin UI**: Working with schedule editing capabilities
 - **Storage Providers**: Working for both local and S3
-- **Scheduler**: Functioning with cron-based scheduling
-- **Frontend Modernization**: Planning phase for React/Next.js integration
+- **Scheduler**: Dynamic cron-based scheduling with database integration
+- **Configuration**: Entirely database-driven, no config files needed
+- **Version**: 0.1.0-rc10
 
 ### Development Focus
 We are currently focused on:
-1. Planning the integration of a modern React frontend with the existing Go backend
-2. Adding customization options for MySQL dump commands to optimize backups
-3. Solidifying the metadata system integration
-4. Ensuring proper UI rendering
+1. Stabilizing the database-driven configuration system
+2. Enhancing the UI for configuration management
+3. Improving error handling and recovery
+4. Planning PostgreSQL support implementation
 
-The main themes are improving reliability, performance, and flexibility while planning for a modernized user interface.
+The main themes are improving reliability, flexibility, and ease of configuration management through the database-driven approach.
 
 ### Recent Milestones
 - Created detailed plan for React frontend integration with Next.js, Auth0, and MariaDB
@@ -86,6 +95,12 @@ The main themes are improving reliability, performance, and flexibility while pl
 - Fixed template rendering issues in the admin UI
 - Enhanced retention policy enforcement to update metadata
 - Improved type safety in templates
+- Migrated to database-driven configuration system
+- Removed dependency on config files and ConfigMaps
+- Implemented dynamic schedule reloading
+- Added UI-based schedule editing
+- Fixed hourly backup schedule timing issue
+- Released version 0.1.0-rc10
 
 ## Known Issues
 
@@ -113,8 +128,8 @@ The main themes are improving reliability, performance, and flexibility while pl
 ### Immediate Tasks
 1. **ST-08: MySQL Authentication Error Handling**
 2. **TD-01: Improve UI edge case handling**
-3. **Complete ST-05: Implement configuration persistence for MySQL options**
-4. **Start MT-01: Backup verification features**
+3. **Start MT-01: Backup verification features**
+4. **Start MT-05: PostgreSQL Support**
 
 ### Upcoming Work
 1. Start work on PostgreSQL support (MT-05)

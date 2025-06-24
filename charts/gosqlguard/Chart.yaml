@@ -16,3 +16,8 @@ sources:
 maintainers:
 - name: mattmattox
   email: mmattox@support.tools
+dependencies:
+- name: mysql
+  version: "9.14.1"
+  repository: "https://charts.bitnami.com/bitnami"
+  condition: mysql.enabled

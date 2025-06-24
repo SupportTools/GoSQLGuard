@@ -11,6 +11,7 @@ import (
 
 	"github.com/supporttools/GoSQLGuard/pkg/config"
 	"github.com/supporttools/GoSQLGuard/pkg/metadata/types"
+	dbmeta "github.com/supporttools/GoSQLGuard/pkg/database/metadata"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -111,6 +112,7 @@ func InitializeMetadataDatabase() error {
 		return Initialize()
 	}
 	DB = db
+	log.Printf("DEBUG: metadata.DB has been set to non-nil value")
 
 	// Run auto-migrations if enabled
 	if config.CFG.MetadataDB.AutoMigrate {
@@ -214,6 +216,12 @@ func runMigrations(db *gorm.DB) error {
 	)
 	if err != nil {
 		return fmt.Errorf("failed to migrate tables: %w", err)
+	}
+	
+	// Also run migrations for server and schedule management tables
+	// Import them from the database/metadata package
+	if err := runServerMigrations(db); err != nil {
+		return fmt.Errorf("failed to migrate server tables: %w", err)
 	}
 
 	// Initialize stats record if it doesn't exist
@@ -960,4 +968,10 @@ func convertToBackupMetas(dbBackups []DatabaseBackup) []types.BackupMeta {
 	}
 	
 	return result
+}
+
+// runServerMigrations runs the database migrations for server and schedule management
+func runServerMigrations(db *gorm.DB) error {
+	// Run the migrations from the database/metadata package
+	return dbmeta.RunMigrations(db)
 }

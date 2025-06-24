@@ -582,10 +582,14 @@ document.addEventListener('DOMContentLoaded', function() {
 	data.Backups = []types.BackupMeta{}
 	
 	// Get backups with applied filters
-	if metadata.DefaultStore != nil {
+	var filteredBackups []types.BackupMeta
+	
+	// Get the appropriate metadata store
+	metadataStore := metadata.GetActiveStore()
+	if metadataStore != nil {
 		// Get backups with basic filters (don't use activeOnly if we have a specific status filter)
 		useActiveOnly := filterActive && filterStatus == ""
-		filteredBackups := metadata.DefaultStore.GetBackupsFiltered(filterServer, filterDB, filterType, useActiveOnly)
+		filteredBackups = metadataStore.GetBackupsFiltered(filterServer, filterDB, filterType, useActiveOnly)
 		
 		// Apply additional filters
 		var finalBackups []types.BackupMeta
@@ -684,8 +688,8 @@ document.addEventListener('DOMContentLoaded', function() {
 	data.LastUpdated = time.Now()
 	
 	// Get recent errors (last 10 failed backups) - only if we're not already filtering by error status
-	if filterStatus != "error" && metadata.DefaultStore != nil {
-		allBackups := metadata.DefaultStore.GetBackupsFiltered("", "", "", false)
+	if filterStatus != "error" && metadataStore != nil {
+		allBackups := metadataStore.GetBackupsFiltered("", "", "", false)
 		var errors []types.BackupMeta
 		for _, backup := range allBackups {
 			if backup.Status == types.StatusError && backup.ErrorMessage != "" {

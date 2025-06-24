@@ -1,0 +1,592 @@
+package pages
+
+import (
+	"github.com/supporttools/GoSQLGuard/templates/types"
+	"github.com/supporttools/GoSQLGuard/templates/layouts"
+	"github.com/supporttools/GoSQLGuard/pkg/config"
+)
+
+script editScheduleOnClick(backupType string, schedule config.BackupTypeConfig) {
+	const scheduleData = {
+		Schedule: schedule.Schedule,
+		Local: schedule.Local,
+		S3: schedule.S3
+	};
+	editSchedule(backupType, scheduleData);
+}
+
+// ConfigurationPageData holds data for the configuration page
+type ConfigurationPageData struct {
+	IsYAMLConfig bool
+	Config       *config.AppConfig
+	Error        string
+}
+
+templ ConfigurationPage(data types.PageData, configData ConfigurationPageData) {
+	@layouts.Base(data) {
+
+		<div class="row">
+			<div class="col-12">
+				<ul class="nav nav-tabs" id="configTabs" role="tablist">
+					<li class="nav-item" role="presentation">
+						<button class="nav-link active" id="servers-tab" data-bs-toggle="tab" data-bs-target="#servers" type="button" role="tab">
+							<i data-feather="server"></i> Database Servers
+						</button>
+					</li>
+					<li class="nav-item" role="presentation">
+						<button class="nav-link" id="storage-tab" data-bs-toggle="tab" data-bs-target="#storage" type="button" role="tab">
+							<i data-feather="hard-drive"></i> Storage
+						</button>
+					</li>
+					<li class="nav-item" role="presentation">
+						<button class="nav-link" id="schedules-tab" data-bs-toggle="tab" data-bs-target="#schedules" type="button" role="tab">
+							<i data-feather="clock"></i> Backup Schedules
+						</button>
+					</li>
+				</ul>
+
+				<div class="tab-content mt-3" id="configTabContent">
+					// Database Servers Tab
+					<div class="tab-pane fade show active" id="servers" role="tabpanel">
+						@renderServersTab(configData)
+					</div>
+
+					// Storage Tab
+					<div class="tab-pane fade" id="storage" role="tabpanel">
+						@renderStorageTab(configData)
+					</div>
+
+					// Backup Schedules Tab
+					<div class="tab-pane fade" id="schedules" role="tabpanel">
+						@renderSchedulesTab(configData)
+					</div>
+				</div>
+			</div>
+		</div>
+
+		// Include configuration scripts
+		@ConfigurationScripts()
+	}
+}
+
+templ renderServersTab(data ConfigurationPageData) {
+	<div class="card">
+		<div class="card-header d-flex justify-content-between align-items-center">
+			<span><i data-feather="server"></i> Database Servers</span>
+			if !data.IsYAMLConfig {
+				<button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addServerModal">
+					<i data-feather="plus"></i> Add Server
+				</button>
+			}
+		</div>
+		<div class="card-body">
+			<div class="table-responsive">
+				<table class="table table-striped">
+					<thead>
+						<tr>
+							<th>Name</th>
+							<th>Type</th>
+							<th>Host</th>
+							<th>Port</th>
+							<th>Username</th>
+							<th>Databases</th>
+							<th>Status</th>
+							if !data.IsYAMLConfig {
+								<th>Actions</th>
+							}
+						</tr>
+					</thead>
+					<tbody id="servers-list">
+						for _, server := range data.Config.DatabaseServers {
+							<tr>
+								<td>{ server.Name }</td>
+								<td>
+									<span class="badge bg-secondary">{ server.Type }</span>
+								</td>
+								<td>{ server.Host }</td>
+								<td>{ server.Port }</td>
+								<td>{ server.Username }</td>
+								<td>
+									for i, db := range server.IncludeDatabases {
+										<span class="badge bg-info">{ db }</span>
+										if i < len(server.IncludeDatabases)-1 {
+											{ " " }
+										}
+									}
+								</td>
+								<td>
+									<span class="badge bg-success">Active</span>
+								</td>
+								if !data.IsYAMLConfig {
+									<td>
+										<button class="btn btn-sm btn-outline-primary" onclick={ editServer(server) }>
+											<i data-feather="edit-2"></i>
+										</button>
+										<button class="btn btn-sm btn-outline-danger" onclick={ deleteServer(server.Name) }>
+											<i data-feather="trash-2"></i>
+										</button>
+									</td>
+								}
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+
+	// Add Server Modal
+	if !data.IsYAMLConfig {
+		@serverModal()
+	}
+}
+
+templ renderStorageTab(data ConfigurationPageData) {
+	<div class="row">
+		// Local Storage Configuration
+		<div class="col-md-6">
+			<div class="card">
+				<div class="card-header">
+					<i data-feather="hard-drive"></i> Local Storage
+				</div>
+				<div class="card-body">
+					<form id="local-storage-form">
+						<div class="form-check form-switch mb-3">
+							<input 
+								class="form-check-input" 
+								type="checkbox" 
+								id="localEnabled" 
+								checked?={ data.Config.Local.Enabled }
+								disabled?={ data.IsYAMLConfig }
+							/>
+							<label class="form-check-label" for="localEnabled">
+								Enable Local Storage
+							</label>
+						</div>
+						
+						<div class="mb-3">
+							<label for="backupDirectory" class="form-label">Backup Directory</label>
+							<input 
+								type="text" 
+								class="form-control" 
+								id="backupDirectory" 
+								value={ data.Config.Local.BackupDirectory }
+								readonly?={ data.IsYAMLConfig }
+							/>
+						</div>
+
+						<div class="mb-3">
+							<label for="localOrgStrategy" class="form-label">Organization Strategy</label>
+							<select class="form-select" id="localOrgStrategy" disabled?={ data.IsYAMLConfig }>
+								<option value="combined" selected?={ data.Config.Local.OrganizationStrategy == "combined" }>Combined</option>
+								<option value="server-only" selected?={ data.Config.Local.OrganizationStrategy == "server-only" }>Server Only</option>
+								<option value="type-only" selected?={ data.Config.Local.OrganizationStrategy == "type-only" }>Type Only</option>
+							</select>
+						</div>
+
+						if !data.IsYAMLConfig {
+							<button type="submit" class="btn btn-primary">
+								<i data-feather="save"></i> Save Local Storage
+							</button>
+						}
+					</form>
+				</div>
+			</div>
+		</div>
+
+		// S3 Storage Configuration
+		<div class="col-md-6">
+			<div class="card">
+				<div class="card-header">
+					<i data-feather="cloud"></i> S3 Storage
+				</div>
+				<div class="card-body">
+					<form id="s3-storage-form">
+						<div class="form-check form-switch mb-3">
+							<input 
+								class="form-check-input" 
+								type="checkbox" 
+								id="s3Enabled" 
+								checked?={ data.Config.S3.Enabled }
+								disabled?={ data.IsYAMLConfig }
+							/>
+							<label class="form-check-label" for="s3Enabled">
+								Enable S3 Storage
+							</label>
+						</div>
+
+						<div class="row">
+							<div class="col-md-6 mb-3">
+								<label for="s3Bucket" class="form-label">Bucket</label>
+								<input 
+									type="text" 
+									class="form-control" 
+									id="s3Bucket" 
+									value={ data.Config.S3.Bucket }
+									readonly?={ data.IsYAMLConfig }
+								/>
+							</div>
+							<div class="col-md-6 mb-3">
+								<label for="s3Region" class="form-label">Region</label>
+								<input 
+									type="text" 
+									class="form-control" 
+									id="s3Region" 
+									value={ data.Config.S3.Region }
+									readonly?={ data.IsYAMLConfig }
+								/>
+							</div>
+						</div>
+
+						<div class="mb-3">
+							<label for="s3Endpoint" class="form-label">Endpoint (Optional)</label>
+							<input 
+								type="text" 
+								class="form-control" 
+								id="s3Endpoint" 
+								value={ data.Config.S3.Endpoint }
+								placeholder="https://s3.amazonaws.com"
+								readonly?={ data.IsYAMLConfig }
+							/>
+						</div>
+
+						<div class="row">
+							<div class="col-md-6 mb-3">
+								<label for="s3AccessKey" class="form-label">Access Key</label>
+								<input 
+									type="text" 
+									class="form-control" 
+									id="s3AccessKey" 
+									value={ data.Config.S3.AccessKey }
+									readonly?={ data.IsYAMLConfig }
+								/>
+							</div>
+							<div class="col-md-6 mb-3">
+								<label for="s3SecretKey" class="form-label">Secret Key</label>
+								<input 
+									type="password" 
+									class="form-control" 
+									id="s3SecretKey" 
+									value={ data.Config.S3.SecretKey }
+									readonly?={ data.IsYAMLConfig }
+								/>
+							</div>
+						</div>
+
+						<div class="mb-3">
+							<label for="s3Prefix" class="form-label">Prefix (Optional)</label>
+							<input 
+								type="text" 
+								class="form-control" 
+								id="s3Prefix" 
+								value={ data.Config.S3.Prefix }
+								readonly?={ data.IsYAMLConfig }
+							/>
+						</div>
+
+						<div class="form-check form-switch mb-3">
+							<input 
+								class="form-check-input" 
+								type="checkbox" 
+								id="s3UseSSL" 
+								checked?={ data.Config.S3.UseSSL }
+								disabled?={ data.IsYAMLConfig }
+							/>
+							<label class="form-check-label" for="s3UseSSL">
+								Use SSL
+							</label>
+						</div>
+
+						if !data.IsYAMLConfig {
+							<button type="submit" class="btn btn-primary">
+								<i data-feather="save"></i> Save S3 Storage
+							</button>
+							<button type="button" class="btn btn-secondary ms-2" onclick="testS3Connection()">
+								<i data-feather="check-circle"></i> Test Connection
+							</button>
+						}
+					</form>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+templ renderSchedulesTab(data ConfigurationPageData) {
+	<div class="card">
+		<div class="card-header">
+			<i data-feather="clock"></i> Backup Schedules
+		</div>
+		<div class="card-body">
+			<div class="table-responsive">
+				<table class="table table-striped">
+					<thead>
+						<tr>
+							<th>Type</th>
+							<th>Schedule (Cron)</th>
+							<th>Local Retention</th>
+							<th>S3 Retention</th>
+							<th>Status</th>
+							if !data.IsYAMLConfig {
+								<th>Actions</th>
+							}
+						</tr>
+					</thead>
+					<tbody>
+						for backupType, schedule := range data.Config.BackupTypes {
+							<tr>
+								<td>
+									<span class="badge bg-primary">{ backupType }</span>
+								</td>
+								<td>
+									<code>{ schedule.Schedule }</code>
+								</td>
+								<td>
+									if schedule.Local.Enabled {
+										<span class="badge bg-success">{ schedule.Local.Retention.Duration }</span>
+									} else {
+										<span class="badge bg-secondary">Disabled</span>
+									}
+								</td>
+								<td>
+									if schedule.S3.Enabled {
+										<span class="badge bg-success">{ schedule.S3.Retention.Duration }</span>
+									} else {
+										<span class="badge bg-secondary">Disabled</span>
+									}
+								</td>
+								<td>
+									<span class="badge bg-success">Active</span>
+								</td>
+								if !data.IsYAMLConfig {
+									<td>
+										<button 
+											class="btn btn-sm btn-outline-primary" 
+											onclick={ templ.ComponentScript(editScheduleOnClick(backupType, schedule)) }
+										>
+											<i data-feather="edit-2"></i>
+										</button>
+									</td>
+								}
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			
+			if !data.IsYAMLConfig {
+				<div class="mt-3">
+					<button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addScheduleModal">
+						<i data-feather="plus"></i> Add Schedule
+					</button>
+				</div>
+			}
+		</div>
+	</div>
+
+	// Schedule Modal
+	if !data.IsYAMLConfig {
+		@scheduleModal()
+	}
+}
+
+// Modal for adding/editing servers
+templ serverModal() {
+	<div class="modal fade" id="addServerModal" tabindex="-1">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Add Database Server</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+				</div>
+				<div class="modal-body">
+					<form id="server-form">
+						<div class="mb-3">
+							<label for="serverName" class="form-label">Server Name</label>
+							<input type="text" class="form-control" id="serverName" required/>
+						</div>
+						
+						<div class="mb-3">
+							<label for="serverType" class="form-label">Type</label>
+							<select class="form-select" id="serverType" required>
+								<option value="">Select type...</option>
+								<option value="mysql">MySQL</option>
+								<option value="postgresql">PostgreSQL</option>
+							</select>
+						</div>
+
+						<div class="row">
+							<div class="col-md-8 mb-3">
+								<label for="serverHost" class="form-label">Host</label>
+								<input type="text" class="form-control" id="serverHost" required/>
+							</div>
+							<div class="col-md-4 mb-3">
+								<label for="serverPort" class="form-label">Port</label>
+								<input type="number" class="form-control" id="serverPort" required/>
+							</div>
+						</div>
+
+						<div class="mb-3">
+							<label for="serverUsername" class="form-label">Username</label>
+							<input type="text" class="form-control" id="serverUsername" required/>
+						</div>
+
+						<div class="mb-3">
+							<label for="serverPassword" class="form-label">Password</label>
+							<input type="password" class="form-control" id="serverPassword" required/>
+						</div>
+
+						<div class="mb-3">
+							<label for="serverDatabases" class="form-label">Databases (comma-separated)</label>
+							<input type="text" class="form-control" id="serverDatabases" 
+								placeholder="db1, db2, db3"/>
+						</div>
+					</form>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+					<button type="button" class="btn btn-primary" onclick="saveServer()">Save Server</button>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+// Modal for adding/editing schedules
+templ scheduleModal() {
+	<div class="modal fade" id="addScheduleModal" tabindex="-1">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Add Backup Schedule</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+				</div>
+				<div class="modal-body">
+					<form id="schedule-form">
+						<div class="mb-3">
+							<label for="scheduleType" class="form-label">Backup Type</label>
+							<input type="text" class="form-control" id="scheduleType" required/>
+						</div>
+						
+						<div class="mb-3">
+							<label for="scheduleCron" class="form-label">Cron Expression</label>
+							<input type="text" class="form-control" id="scheduleCron" 
+								placeholder="0 2 * * *" required/>
+							<small class="form-text text-muted">
+								Format: minute hour day month weekday
+							</small>
+						</div>
+
+						<h6>Local Storage Retention</h6>
+						<div class="row mb-3">
+							<div class="col-md-6">
+								<div class="form-check form-switch">
+									<input class="form-check-input" type="checkbox" id="localRetentionEnabled"/>
+									<label class="form-check-label" for="localRetentionEnabled">
+										Enable
+									</label>
+								</div>
+							</div>
+							<div class="col-md-6">
+								<input type="text" class="form-control" id="localRetentionDuration" 
+									placeholder="24h, 7d, 30d"/>
+							</div>
+						</div>
+
+						<h6>S3 Storage Retention</h6>
+						<div class="row mb-3">
+							<div class="col-md-6">
+								<div class="form-check form-switch">
+									<input class="form-check-input" type="checkbox" id="s3RetentionEnabled"/>
+									<label class="form-check-label" for="s3RetentionEnabled">
+										Enable
+									</label>
+								</div>
+							</div>
+							<div class="col-md-6">
+								<input type="text" class="form-control" id="s3RetentionDuration" 
+									placeholder="168h, 30d, 90d"/>
+							</div>
+						</div>
+					</form>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+					<button type="button" class="btn btn-primary" onclick="saveSchedule()">Save Schedule</button>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+// JavaScript functions for dynamic actions
+script editServer(server config.DatabaseServerConfig) {
+	console.log("Edit server:", server);
+	// TODO: Populate modal with server data
+}
+
+script deleteServer(name string) {
+	if (confirm("Are you sure you want to delete this server?")) {
+		// TODO: Call delete API
+	}
+}
+
+script editSchedule(backupType string, schedule config.BackupTypeConfig) {
+	console.log("Edit schedule:", backupType, schedule);
+	// TODO: Populate modal with schedule data
+}
+
+// Render database options tab
+templ renderDatabaseOptionsTab(data ConfigurationPageData) {
+	<div class="row">
+		// MySQL Global Options
+		<div class="col-md-6">
+			<div class="card">
+				<div class="card-header d-flex justify-content-between align-items-center">
+					<span><i data-feather="database"></i> MySQL Global Options</span>
+					if !data.IsYAMLConfig {
+						<button class="btn btn-sm btn-primary" onclick="showMySQLOptions('')">
+							<i data-feather="settings"></i> Configure
+						</button>
+					}
+				</div>
+				<div class="card-body">
+					<p>Configure global options for MySQL backups that apply to all MySQL servers.</p>
+					<ul>
+						<li>Additional mysqldump options</li>
+						<li>Default dump parameters</li>
+						<li>Connection settings</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+
+		// PostgreSQL Global Options
+		<div class="col-md-6">
+			<div class="card">
+				<div class="card-header d-flex justify-content-between align-items-center">
+					<span><i data-feather="database"></i> PostgreSQL Global Options</span>
+					if !data.IsYAMLConfig {
+						<button class="btn btn-sm btn-primary" onclick="showPostgreSQLOptions('')">
+							<i data-feather="settings"></i> Configure
+						</button>
+					}
+				</div>
+				<div class="card-body">
+					<p>Configure global options for PostgreSQL backups that apply to all PostgreSQL servers.</p>
+					<ul>
+						<li>Additional pg_dump options</li>
+						<li>Dump format (plain, custom, tar, directory)</li>
+						<li>Compression level</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="mt-4">
+		<div class="alert alert-info">
+			<i data-feather="info"></i> <strong>Note:</strong> Server-specific options override global options. Configure server-specific options by clicking the tools button next to each server in the Database Servers tab.
+		</div>
+	</div>
+}

@@ -98,20 +98,8 @@ func (p *Provider) ListDatabases(ctx context.Context) ([]string, error) {
 
 // Backup performs a database backup and writes it to the provided writer
 func (p *Provider) Backup(ctx context.Context, dbName string, output io.Writer, options common.BackupOptions) error {
-	// Get backup type from context if available
-	var backupType string
-	if bt, ok := ctx.Value("backupType").(string); ok {
-		backupType = bt
-	}
-
-	// Get MySQL dump options for this backup type
-	mysqlDumpOptions := config.CFG.MySQLDumpOptions
-	if backupType != "" {
-		// If a backup type is specified, use those options instead
-		if typeConfig, exists := config.CFG.BackupTypes[backupType]; exists {
-			mysqlDumpOptions = typeConfig.MySQLDumpOptions
-		}
-	}
+	// Get MySQL dump options (hardcoded now, not from config)
+	mysqlDumpOptions := config.MySQLDumpOptionsConfig{}
 
 	// For debugging
 	if config.CFG.Debug {

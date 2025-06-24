@@ -1,0 +1,312 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+	"github.com/dustin/go-humanize"
+	"github.com/supporttools/GoSQLGuard/templates/types"
+	"github.com/supporttools/GoSQLGuard/templates/layouts"
+	"github.com/supporttools/GoSQLGuard/templates/components"
+	"github.com/supporttools/GoSQLGuard/pkg/config"
+	metadataTypes "github.com/supporttools/GoSQLGuard/pkg/metadata/types"
+)
+
+// DashboardPageData holds data for the dashboard page
+type DashboardPageData struct {
+	Stats          map[string]interface{}
+	RecentBackups  []metadataTypes.BackupMeta
+	Databases      []string
+	BackupTypes    map[string]config.BackupTypeConfig
+	LocalEnabled   bool
+	S3Enabled      bool
+	LastUpdated    time.Time
+}
+
+templ DashboardPage(data types.PageData, dashboard DashboardPageData) {
+	@layouts.Base(data) {
+		<div class="row" id="stats-container">
+			@renderStats(dashboard.Stats)
+		</div>
+
+		// Status Counts
+		if statusCounts, ok := dashboard.Stats["statusCounts"].(map[string]int); ok {
+			<div class="row mt-4">
+				for status, count := range statusCounts {
+					<div class="col-md-3">
+						<div class="card">
+							<div class={ "card-body", getStatusColorClass(status) }>
+								<h5 class="card-title text-capitalize">{ status }</h5>
+								<p class="display-4">{ fmt.Sprintf("%d", count) }</p>
+							</div>
+						</div>
+					</div>
+				}
+			</div>
+		}
+
+		// Server Statistics
+		if serverDist, ok := dashboard.Stats["serverDistribution"].(map[string]int); ok && len(serverDist) > 0 {
+			<div class="row mt-4">
+				<div class="col-12">
+					<div class="card">
+						<div class="card-header">
+							<i data-feather="server"></i> Server Statistics
+						</div>
+						<div class="card-body">
+							<div class="row">
+								for server, count := range serverDist {
+									<div class="col-md-3 mb-3">
+										<div class="card bg-light">
+											<div class="card-body text-center">
+												<h6 class="card-title">{ server }</h6>
+												<p class="display-6">{ fmt.Sprintf("%d", count) }</p>
+												<small class="text-muted">backups</small>
+											</div>
+										</div>
+									</div>
+								}
+							</div>
+							<div class="text-end mt-2">
+								<a href="/servers" class="btn btn-sm btn-outline-primary">View Server Details</a>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		}
+
+		// Recent Backups with HTMX auto-refresh
+		<div class="row mt-4">
+			<div class="col-12">
+				<div class="card">
+					<div class="card-header d-flex justify-content-between align-items-center">
+						<span>Recent Backups</span>
+						<span class="htmx-indicator spinner-border spinner-border-sm text-primary" role="status">
+							<span class="visually-hidden">Loading...</span>
+						</span>
+					</div>
+					<div class="card-body" 
+						id="recent-backups"
+						hx-get="/api/dashboard/recent-backups" 
+						hx-trigger="load, every 10s"
+						hx-indicator="#recent-backups .htmx-indicator">
+						@RenderRecentBackups(dashboard.RecentBackups)
+					</div>
+				</div>
+			</div>
+		</div>
+
+		// Quick Actions
+		<div class="row mt-4">
+			<div class="col-12">
+				<div class="card">
+					<div class="card-header">
+						Quick Actions
+					</div>
+					<div class="card-body">
+						<div class="d-flex gap-2 flex-wrap">
+							for backupType, _ := range dashboard.BackupTypes {
+								<button 
+									class="btn btn-outline-primary btn-sm"
+									hx-post={ fmt.Sprintf("/api/backups/run?type=%s", backupType) }
+									hx-confirm={ fmt.Sprintf("Are you sure you want to run a %s backup?", backupType) }
+									hx-swap="none"
+									hx-indicator="#action-indicator"
+									data-loading-disable
+									data-loading-aria-busy>
+									Run { backupType } Backup
+								</button>
+							}
+							<button 
+								class="btn btn-outline-warning btn-sm"
+								hx-post="/api/retention/run"
+								hx-confirm="Are you sure you want to run retention policy enforcement?"
+								hx-swap="none"
+								hx-indicator="#action-indicator"
+								data-loading-disable
+								data-loading-aria-busy>
+								Run Retention
+							</button>
+							<span id="action-indicator" class="htmx-indicator ms-2">
+								<span class="spinner-border spinner-border-sm" role="status">
+									<span class="visually-hidden">Loading...</span>
+								</span>
+							</span>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		// Toast container for notifications
+		<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+			<div id="toast-container"></div>
+		</div>
+
+		<script>
+			// Listen for HTMX events to show notifications
+			document.body.addEventListener('htmx:afterRequest', function(evt) {
+				if (evt.detail.xhr.status === 200) {
+					try {
+						const response = JSON.parse(evt.detail.xhr.responseText);
+						if (response.message) {
+							showToast('Success', response.message, 'success');
+						}
+					} catch (e) {
+						// Response might not be JSON
+						showToast('Success', 'Operation completed successfully', 'success');
+					}
+				} else {
+					showToast('Error', 'Operation failed', 'danger');
+				}
+			});
+
+			function showToast(title, message, type) {
+				const toastHtml = `
+					<div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+						<div class="d-flex">
+							<div class="toast-body">
+								<strong>${title}:</strong> ${message}
+							</div>
+							<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+						</div>
+					</div>
+				`;
+				
+				const toastContainer = document.getElementById('toast-container');
+				toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+				
+				const toastElement = toastContainer.lastElementChild;
+				const toast = new bootstrap.Toast(toastElement);
+				toast.show();
+				
+				// Remove toast element after it's hidden
+				toastElement.addEventListener('hidden.bs.toast', () => {
+					toastElement.remove();
+				});
+			}
+		</script>
+	}
+}
+
+templ renderStats(stats map[string]interface{}) {
+	// Summary Cards
+	<div class="col-md-4">
+		@components.StatsCard(
+			"Backups",
+			fmt.Sprintf("%v", stats["totalCount"]),
+			"Total backups",
+			"bg-light",
+			"database",
+		)
+	</div>
+	<div class="col-md-4">
+		@components.StatsCard(
+			"Storage",
+			humanize.Bytes(getUint64Value(stats["totalLocalSize"])),
+			"Total backup size",
+			"bg-light",
+			"hard-drive",
+		)
+	</div>
+	<div class="col-md-4">
+		<div class="card bg-light">
+			<div class="card-body">
+				<div class="d-flex justify-content-between align-items-center">
+					<div>
+						<h5 class="card-title mb-0">Last Backup</h5>
+						if lastBackupTime, ok := stats["lastBackupTime"].(time.Time); ok && !lastBackupTime.IsZero() {
+							<p class="card-text">{ humanize.Time(lastBackupTime) }</p>
+							<div class="text-muted">{ lastBackupTime.Format("2006-01-02 15:04:05") }</div>
+						} else {
+							<p class="card-text text-muted">No backups yet</p>
+						}
+					</div>
+					<div>
+						<i data-feather="clock" class="text-muted" style="width: 48px; height: 48px;"></i>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+templ RenderRecentBackups(backups []metadataTypes.BackupMeta) {
+	if len(backups) > 0 {
+		<div class="table-responsive">
+			<table class="table table-striped table-hover">
+				<thead>
+					<tr>
+						<th>Server</th>
+						<th>Database</th>
+						<th>Type</th>
+						<th>Created</th>
+						<th>Size</th>
+						<th>Status</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, backup := range backups {
+						<tr>
+							<td>{ backup.ServerName }</td>
+							<td>{ backup.Database }</td>
+							<td>{ backup.BackupType }</td>
+							<td>{ backup.CreatedAt.Format("2006-01-02 15:04:05") }</td>
+							<td>{ humanize.Bytes(uint64(backup.Size)) }</td>
+							<td>
+								<span class={ "badge", getStatusBadgeClass(string(backup.Status)) }>
+									{ string(backup.Status) }
+								</span>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<a href="/status/backups" class="btn btn-sm btn-primary">View All Backups</a>
+	} else {
+		<p class="card-text text-muted">No backups have been created yet.</p>
+	}
+}
+
+// Helper functions
+func getStatusColorClass(status string) string {
+	switch status {
+	case "success":
+		return "bg-success-light"
+	case "error":
+		return "bg-danger-light"
+	case "pending":
+		return "bg-info-light"
+	default:
+		return "bg-warning-light"
+	}
+}
+
+func getStatusBadgeClass(status string) string {
+	switch status {
+	case "success":
+		return "bg-success"
+	case "error":
+		return "bg-danger"
+	case "pending":
+		return "bg-info"
+	default:
+		return "bg-warning"
+	}
+}
+
+func getUint64Value(v interface{}) uint64 {
+	switch val := v.(type) {
+	case uint64:
+		return val
+	case int64:
+		return uint64(val)
+	case int:
+		return uint64(val)
+	case float64:
+		return uint64(val)
+	default:
+		return 0
+	}
+}

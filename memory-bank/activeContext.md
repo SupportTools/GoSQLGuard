@@ -20,6 +20,33 @@ The implementation will begin with a Proof of Concept (POC) phase to validate th
 
 ## Recent Changes
 
+### Database-Driven Configuration System
+
+As of version 0.1.0-rc10, GoSQLGuard has transitioned to a fully database-driven configuration system:
+
+- **No Config Files**: The application no longer uses config.yaml files
+- **ConfigMap Removed**: Kubernetes deployments no longer need ConfigMaps
+- **Environment Variables**: Basic settings come from environment variables
+- **MySQL Metadata Database**: All dynamic configuration is stored in the database:
+  - Server definitions with credentials and options
+  - Backup schedules with cron expressions
+  - Backup types and retention policies
+  - MySQL dump options per backup type
+- **Dynamic Reloading**: Configuration changes take effect immediately without restart
+- **UI-Based Management**: All configuration can be managed through the web interface
+
+### Schedule Management Through UI
+
+The admin interface now includes comprehensive schedule management:
+
+- View and edit backup schedules directly in the UI
+- Enable/disable schedules without restarting the application
+- Validate cron expressions before saving
+- Changes are immediately picked up by the scheduler
+- Fixed hourly backup schedule to run at the top of each hour (0 * * * *)
+
+## Recent Changes
+
 ### Multi-Server Backup with Manual Backup Type
 
 The GoSQLGuard application now supports a more flexible manual backup system with these enhancements:
@@ -98,19 +125,19 @@ The GoSQLGuard application now supports backing up multiple database servers thr
 
 ## Current Tasks
 
+- Stabilize the database-driven configuration system
+- Enhance error handling for database connectivity issues
 - Begin work on React frontend Proof of Concept
-- Test multi-server backup functionality with real servers
-- Test MySQL 8.0+ compatibility with the new authentication plugin support
-- Create additional examples for common server configurations
 - Consider adding PostgreSQL support for additional database types
+- Improve UI error handling and edge cases
 
 ## Next Steps
 
+- Implement backup verification features
+- Add PostgreSQL database support
 - Develop detailed implementation plan for React frontend
-- Enhance metrics to show per-server statistics
-- Add server-specific configuration in the admin UI
-- Create documentation for multi-server setup and best practices
-- Add more comprehensive error handling for authentication issues
+- Enhance reporting and analytics features
+- Add authentication system for the admin UI
 
 ## Technical Decisions
 
@@ -131,5 +158,13 @@ The multi-server implementation takes a combined storage approach by default, wh
 For the MySQL authentication plugin support:
 1. We opted for an explicit `authPlugin` configuration rather than auto-detection, giving users the ability to control this behavior explicitly
 2. We've made it an optional setting to maintain backward compatibility
-3. The Docker image now includes a compatibility fix for the `caching_sha2_password` plugin on Alpine Linux
-4. The default MySQL client in the Docker image supports the `--default-auth` parameter for specifying the plugin mechanism
+3. The Docker image now uses Ubuntu 22.04 with mysql-client-core-8.0 for native MySQL 8.0+ support
+4. The MySQL client supports the `--default-auth` parameter for specifying the authentication plugin
+
+### Configuration Management
+The transition to database-driven configuration was made to:
+1. Eliminate the complexity of managing config files in containers
+2. Enable dynamic configuration changes without restarts
+3. Provide a better user experience with UI-based configuration
+4. Simplify Kubernetes deployments by removing ConfigMaps
+5. Centralize all configuration in a single source of truth

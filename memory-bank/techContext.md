@@ -1,5 +1,10 @@
 # Technical Context for GoSQLGuard
 
+## Current Version
+- **Version**: 0.1.0-rc10
+- **Configuration**: Entirely database-driven (no config files)
+- **Deployment**: Kubernetes-ready with Helm charts
+
 ## Technologies Used
 
 ### Core Technologies
@@ -62,6 +67,30 @@
 - **mysqldump**: External command for creating MySQL backups, part of mysql-client-core-8.0
 - **pg_dump**: External command for creating PostgreSQL backups (planned)
 - **gzip**: For backup compression
+
+## Configuration Approach
+
+### Database-Driven Configuration
+As of version 0.1.0-rc10, GoSQLGuard uses a fully database-driven configuration approach:
+
+- **No Config Files**: The application no longer uses YAML configuration files
+- **Environment Variables**: Basic settings (database connections, storage paths) come from environment variables
+- **MySQL Metadata Database**: All dynamic configuration is stored in the MySQL metadata database:
+  - Server definitions (host, port, credentials, options)
+  - Backup schedules (cron expressions, enabled/disabled state)
+  - Backup types and retention policies
+  - MySQL dump options per backup type
+- **Dynamic Reloading**: Changes to schedules and servers are picked up automatically without restart
+- **UI Management**: Configuration can be modified through the web UI
+- **Kubernetes Integration**: Helm charts no longer require ConfigMap, only environment variables
+
+### Environment Variables
+Key environment variables:
+- `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`: Metadata database connection
+- `LOCAL_BASE_PATH`: Local storage path for backups
+- `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`: S3 storage configuration
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: S3 credentials
+- `ADMIN_BIND_ADDRESS`: Admin server listen address
 
 ## Development Setup
 
@@ -244,10 +273,14 @@ GoSQLGuard/
 ## External Interfaces
 
 ### Current Admin Web UI
-- Dashboard for backup status
-- Filters for viewing backups by type, database, status
-- Manual backup triggering
+- Dashboard for backup status and server statistics
+- Advanced filtering (date range, search, server, database, type, status)
+- Manual backup triggering with multi-server/database support
 - Retention policy enforcement
+- Server management page with detailed statistics
+- Schedule configuration editing through UI
+- MySQL dump options configuration interface
+- Error details viewing with modal dialogs
 
 ### Planned React Frontend
 - Modern dashboard with real-time updates
@@ -260,6 +293,13 @@ GoSQLGuard/
 - Current:
   - `/api/backups/run` - Trigger manual backup
   - `/api/retention/run` - Trigger retention policy enforcement
+  - `/api/servers` - Get server list and statistics
+  - `/api/servers/{id}` - Get specific server details
+  - `/api/schedules` - Get and update backup schedules
+  - `/api/mysql-options` - Get and update MySQL dump options
+  - `/api/s3/download-url` - Generate presigned S3 download URLs
+  - `/metrics` - Prometheus metrics endpoint
+  - `/health` - Health check endpoint
   - Status endpoints for monitoring integration
 
 - Planned:

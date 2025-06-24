@@ -1,0 +1,136 @@
+# Development values for GoSQLGuard
+# Override values for gosqlguard-dev namespace
+
+# Enable debug mode for development
+settings:
+  debug: true
+  
+  # Admin UI configuration
+  adminUI:
+    enabled: true
+    port: 8080
+  
+  # Metrics configuration  
+  metrics:
+    enabled: true
+    port: 8080
+  
+  # Example database server for development
+  database_servers:
+    - name: "dev-mysql"
+      type: "mysql"
+      host: "mysql.gosqlguard-dev.svc.cluster.local"  # Assuming a MySQL instance in the same namespace
+      port: 3306
+      username: "backup_user"
+      password: "changeme"  # Change this to a secure password
+      includeDatabases: ["testdb"]
+      excludeDatabases: ["mysql", "information_schema", "performance_schema", "sys"]
+      mysqlDumpOptions:
+        singleTransaction: true
+        quick: true
+        skipLockTables: true
+  
+  # Development backup schedules (more frequent for testing)
+  backupTypes:
+    manual:
+      schedule: ""  # No schedule - manual only
+      local:
+        enabled: true
+        retention:
+          duration: "168h"  # Keep for 7 days
+          forever: false
+      s3:
+        enabled: false
+    hourly:
+      schedule: "0 * * * *"  # Every hour at minute 0
+      local:
+        enabled: true
+        retention:
+          duration: "24h"  # Keep for 24 hours
+          forever: false
+      s3:
+        enabled: false
+    daily:
+      schedule: "0 2 * * *"  # Every day at 2 AM
+      local:
+        enabled: true
+        retention:
+          duration: "168h"  # Keep for 7 days
+          forever: false
+      s3:
+        enabled: false
+    weekly:
+      schedule: "0 3 * * 0"  # Every Sunday at 3 AM
+      local:
+        enabled: true
+        retention:
+          duration: "720h"  # Keep for 30 days
+          forever: false
+      s3:
+        enabled: false
+  
+  # Local storage only for development
+  local:
+    enabled: true
+    backupDirectory: "/backups"
+    organizationStrategy: "combined"
+  
+  s3:
+    enabled: false
+  
+  # Metadata database configuration
+  metadata_database:
+    enabled: true
+    host: "mysql.gosqlguard-dev.svc.cluster.local"
+    port: 3306
+    username: "gosqlguard"
+    password: "dev-password"
+    database: "gosqlguard_metadata"
+    maxOpenConns: 10
+    maxIdleConns: 5
+    connMaxLifetime: "5m"
+    autoMigrate: true
+
+# MySQL subchart configuration for development
+mysql:
+  enabled: false  # Using standalone MySQL deployment
+
+# Smaller persistence for development
+persistence:
+  enabled: true
+  size: "5Gi"
+  storageClass: ""  # Use default storage class
+  accessMode: ReadWriteOnce
+  
+metadataPersistence:
+  enabled: true
+  size: "1Gi"
+  storageClass: ""
+  accessMode: ReadWriteOnce
+
+# Lower resource limits for development
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# Enable ingress for easier access in development
+ingress:
+  enabled: true
+  className: "nginx"  # Adjust based on your cluster's ingress controller
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  hosts:
+    - host: gosqlguard.dev.support.tools
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Development-specific labels
+podLabels:
+  environment: "development"
+  app: "gosqlguard"

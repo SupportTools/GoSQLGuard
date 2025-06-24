@@ -1,19 +1,37 @@
 package pages
 
 import (
-	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/supporttools/GoSQLGuard/pkg/config"
 	"github.com/supporttools/GoSQLGuard/pkg/metadata"
 	"github.com/supporttools/GoSQLGuard/pkg/metadata/types"
 )
+
+// EnhancedBackupPageData extends BackupStatusPageData with pagination
+type EnhancedBackupPageData struct {
+	BackupStatusPageData
+	// Pagination fields
+	IsPaginated    bool
+	CurrentPage    int
+	PageSize       int
+	TotalBackups   int64
+	TotalPages     int
+	ShowingStart   int
+	ShowingEnd     int
+	PageNumbers    []int
+	PrevPageQuery  template.URL
+	NextPageQuery  template.URL
+	// Sorting
+	SortBy    string
+	SortOrder string
+}
 
 // BackupStatusPageOptimized renders the optimized backup status page with pagination
 func BackupStatusPageOptimized(w http.ResponseWriter, r *http.Request) {
@@ -402,25 +420,6 @@ window.addEventListener('DOMContentLoaded', function() {
 		return
 	}
 
-	// Enhanced page data structure
-	type EnhancedBackupPageData struct {
-		BackupStatusPageData
-		// Pagination fields
-		IsPaginated    bool
-		CurrentPage    int
-		PageSize       int
-		TotalBackups   int64
-		TotalPages     int
-		ShowingStart   int
-		ShowingEnd     int
-		PageNumbers    []int
-		PrevPageQuery  template.URL
-		NextPageQuery  template.URL
-		// Sorting
-		SortBy    string
-		SortOrder string
-	}
-
 	// Helper methods for template
 	data := &EnhancedBackupPageData{
 		BackupStatusPageData: BackupStatusPageData{
@@ -748,4 +747,40 @@ func getRecentErrors(limit int) []types.BackupMeta {
 	}
 	
 	return errors
+}
+
+func getUniqueDatabases() []string {
+	databaseMap := make(map[string]bool)
+	backups := metadata.DefaultStore.GetBackups()
+	
+	for _, b := range backups {
+		if b.Database != "" {
+			databaseMap[b.Database] = true
+		}
+	}
+	
+	databases := make([]string, 0, len(databaseMap))
+	for db := range databaseMap {
+		databases = append(databases, db)
+	}
+	
+	return databases
+}
+
+func getUniqueServers() []string {
+	serverMap := make(map[string]bool)
+	backups := metadata.DefaultStore.GetBackups()
+	
+	for _, b := range backups {
+		if b.ServerName != "" {
+			serverMap[b.ServerName] = true
+		}
+	}
+	
+	servers := make([]string, 0, len(serverMap))
+	for server := range serverMap {
+		servers = append(servers, server)
+	}
+	
+	return servers
 }

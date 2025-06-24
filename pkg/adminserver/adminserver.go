@@ -4,6 +4,7 @@ package adminserver
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -12,10 +13,12 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
 	"github.com/supporttools/GoSQLGuard/pkg/api"
 	"github.com/supporttools/GoSQLGuard/pkg/backup"
 	"github.com/supporttools/GoSQLGuard/pkg/config"
 	"github.com/supporttools/GoSQLGuard/pkg/database"
+	"github.com/supporttools/GoSQLGuard/pkg/handlers"
 	"github.com/supporttools/GoSQLGuard/pkg/metadata"
 	"github.com/supporttools/GoSQLGuard/pkg/pages"
 	"github.com/supporttools/GoSQLGuard/pkg/scheduler"
@@ -79,14 +82,16 @@ func (s *Server) Stop() error {
 
 // registerRoutes registers all HTTP routes
 func (s *Server) registerRoutes(mux *http.ServeMux) {
-	// Static pages
-	mux.HandleFunc("/", pages.DefaultPage)
+	// Static pages - Use new Templ-based handler for dashboard
+	mux.HandleFunc("/", handlers.DashboardHandler)
+	// Keep existing handlers for now, will migrate incrementally
 	mux.HandleFunc("/status/backups", pages.BackupStatusPage)
 	mux.HandleFunc("/status/storage", pages.StorageStatusPage)
 	mux.HandleFunc("/databases", pages.DatabasesPage)
 	mux.HandleFunc("/s3download", pages.S3DownloadPage)
-	mux.HandleFunc("/servers", pages.ServersPage) // Add servers management page
+	mux.HandleFunc("/servers", handlers.ServersHandler) // Servers management page
 	mux.HandleFunc("/mysql-options", pages.MySQLOptionsPage) // MySQL dump options configuration
+	mux.HandleFunc("/configuration", handlers.ConfigurationHandler) // Configuration management page
 	
 	// Standard endpoints
 	mux.Handle("/metrics", promhttp.Handler())
@@ -105,16 +110,42 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/storage", s.storageInfoHandler)
 	mux.HandleFunc("/api/retention/run", s.runRetentionHandler)
 	
+	// HTMX endpoints
+	mux.HandleFunc("/api/dashboard/recent-backups", handlers.RecentBackupsHandler)
+	
 	// MySQL options operations
 	mux.HandleFunc("/api/mysql-options/global", s.mysqlOptionsHandler)
 	
 	// Server and schedule management API
 	serverHandler := api.NewServerHandler()
-	scheduleHandler := api.NewScheduleHandler()
-	backupsHandler := api.NewBackupsHandler()
-	serverHandler.RegisterRoutes()
-	scheduleHandler.RegisterRoutes()
-	backupsHandler.RegisterRoutes()
+	scheduleHandler := api.NewScheduleHandler(s.scheduler)
+	serverHandler.RegisterRoutes(mux)
+	scheduleHandler.RegisterRoutes(mux)
+	
+	// Configuration management API
+	// TODO: Implement config handler
+	// configHandler, err := api.NewConfigHandler()
+	// if err != nil {
+	// 	log.Printf("Warning: Failed to initialize config API: %v", err)
+	// } else {
+	// 	configHandler.RegisterRoutes(mux)
+	// }
+	
+	// S3 configuration API
+	logger := logrus.New()
+	if config.CFG.Debug {
+		logger.SetLevel(logrus.DebugLevel)
+	}
+	s3Handler := api.NewS3ConfigHandler(&config.CFG, logger)
+	s3Handler.RegisterRoutes(mux)
+	
+	// MySQL options configuration API
+	mysqlOptionsHandler := api.NewMySQLOptionsHandler(&config.CFG, nil)
+	mysqlOptionsHandler.RegisterRoutes(mux)
+	
+	// PostgreSQL options configuration API
+	postgresqlOptionsHandler := api.NewPostgreSQLOptionsHandler(&config.CFG, nil)
+	postgresqlOptionsHandler.RegisterRoutes(mux)
 }
 
 // healthCheckHandler returns a simple health status
@@ -132,7 +163,15 @@ func (s *Server) healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 // statsHandler returns statistics about backups
 func (s *Server) statsHandler(w http.ResponseWriter, r *http.Request) {
-	stats := metadata.DefaultStore.GetStats()
+	// Get the active metadata store
+	metadataStore := metadata.GetActiveStore()
+	if metadataStore == nil {
+		log.Printf("Metadata store not available")
+		http.Error(w, "Metadata store not available", http.StatusServiceUnavailable)
+		return
+	}
+	
+	stats := metadataStore.GetStats()
 	
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(stats); err != nil {
@@ -148,7 +187,15 @@ func (s *Server) listBackupsHandler(w http.ResponseWriter, r *http.Request) {
 	backupType := r.URL.Query().Get("type")
 	activeOnly := r.URL.Query().Get("activeOnly") == "true"
 	
-	backups := metadata.DefaultStore.GetBackupsFiltered("", database, backupType, activeOnly)
+	// Get the active metadata store
+	metadataStore := metadata.GetActiveStore()
+	if metadataStore == nil {
+		log.Printf("Metadata store not available")
+		http.Error(w, "Metadata store not available", http.StatusServiceUnavailable)
+		return
+	}
+	
+	backups := metadataStore.GetBackupsFiltered("", database, backupType, activeOnly)
 	
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
@@ -217,6 +264,12 @@ func (s *Server) runBackupHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	
+	// Check if scheduler is available
+	if s.scheduler == nil {
+		http.Error(w, "Scheduler not configured", http.StatusInternalServerError)
+		return
+	}
+	
 	// Check if a task is already running
 	if !triggerBackup(s, backupType, servers, databases) {
 		http.Error(w, "A backup task is already running", http.StatusConflict)
@@ -257,15 +310,23 @@ func (s *Server) deleteBackupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
+	// Get the active metadata store
+	metadataStore := metadata.GetActiveStore()
+	if metadataStore == nil {
+		log.Printf("Metadata store not available")
+		http.Error(w, "Metadata store not available", http.StatusServiceUnavailable)
+		return
+	}
+	
 	// Check if the backup exists
-	backup, exists := metadata.DefaultStore.GetBackupByID(backupID)
+	backup, exists := metadataStore.GetBackupByID(backupID)
 	if !exists {
 		http.Error(w, fmt.Sprintf("Backup with ID %s not found", backupID), http.StatusNotFound)
 		return
 	}
 	
 	// Mark as deleted in metadata
-	if err := metadata.DefaultStore.MarkBackupDeleted(backupID); err != nil {
+	if err := metadataStore.MarkBackupDeleted(backupID); err != nil {
 		log.Printf("Error marking backup as deleted: %v", err)
 		http.Error(w, "Error deleting backup", http.StatusInternalServerError)
 		return
@@ -301,8 +362,16 @@ func (s *Server) storageInfoHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	
+	// Get the active metadata store
+	metadataStore := metadata.GetActiveStore()
+	if metadataStore == nil {
+		log.Printf("Metadata store not available")
+		http.Error(w, "Metadata store not available", http.StatusServiceUnavailable)
+		return
+	}
+	
 	// Add stats
-	stats := metadata.DefaultStore.GetStats()
+	stats := metadataStore.GetStats()
 	info["stats"] = stats
 	
 	w.Header().Set("Content-Type", "application/json")
@@ -322,8 +391,15 @@ func (s *Server) serveLogFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get the active metadata store
+	metadataStore := metadata.GetActiveStore()
+	if metadataStore == nil {
+		http.Error(w, "Metadata store not available", http.StatusServiceUnavailable)
+		return
+	}
+
 	// Check if the backup exists
-	backup, exists := metadata.DefaultStore.GetBackupByID(backupID)
+	backup, exists := metadataStore.GetBackupByID(backupID)
 	if !exists {
 		http.Error(w, fmt.Sprintf("Backup with ID %s not found", backupID), http.StatusNotFound)
 		return
@@ -341,12 +417,103 @@ func (s *Server) serveLogFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set appropriate headers for text display
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%s.log", backupID))
+	// Read the log file
+	logContent, err := os.ReadFile(backup.LogFilePath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error reading log file: %v", err), http.StatusInternalServerError)
+		return
+	}
 
-	// Serve the file
-	http.ServeFile(w, r, backup.LogFilePath)
+	// Create a simple HTML page to display the log
+	tmpl := `<!DOCTYPE html>
+<html>
+<head>
+    <title>Backup Log - {{.BackupID}}</title>
+    <style>
+        body {
+            font-family: monospace;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            margin: 0;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin: 0;
+            padding: 10px;
+            background-color: #252526;
+            border-radius: 5px;
+        }
+        .header {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #2d2d30;
+            border-radius: 5px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 18px;
+            color: #cccccc;
+        }
+        .info {
+            color: #9cdcfe;
+            margin-top: 5px;
+            font-size: 14px;
+        }
+        a {
+            color: #007acc;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Backup Log</h1>
+        <div class="info">
+            Backup ID: {{.BackupID}}<br>
+            Server: {{.ServerName}}<br>
+            Database: {{.Database}}<br>
+            Type: {{.BackupType}}<br>
+            Status: {{.Status}}<br>
+            <a href="/status/backups">← Back to Backup List</a>
+        </div>
+    </div>
+    <pre>{{.LogContent}}</pre>
+</body>
+</html>`
+
+	// Parse and execute the template
+	t, err := template.New("log").Parse(tmpl)
+	if err != nil {
+		http.Error(w, "Error rendering log page", http.StatusInternalServerError)
+		return
+	}
+
+	data := struct {
+		BackupID   string
+		ServerName string
+		Database   string
+		BackupType string
+		Status     string
+		LogContent string
+	}{
+		BackupID:   backupID,
+		ServerName: backup.ServerName,
+		Database:   backup.Database,
+		BackupType: backup.BackupType,
+		Status:     string(backup.Status),
+		LogContent: string(logContent),
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := t.Execute(w, data); err != nil {
+		http.Error(w, "Error rendering log page", http.StatusInternalServerError)
+		return
+	}
 }
 
 // downloadLocalBackupHandler serves a backup file from local storage for download
@@ -358,8 +525,16 @@ func (s *Server) downloadLocalBackupHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Get the active metadata store
+	metadataStore := metadata.GetActiveStore()
+	if metadataStore == nil {
+		log.Printf("Metadata store not available")
+		http.Error(w, "Metadata store not available", http.StatusServiceUnavailable)
+		return
+	}
+
 	// Check if the backup exists
-	backup, exists := metadata.DefaultStore.GetBackupByID(backupID)
+	backup, exists := metadataStore.GetBackupByID(backupID)
 	if !exists {
 		http.Error(w, fmt.Sprintf("Backup with ID %s not found", backupID), http.StatusNotFound)
 		return
@@ -399,8 +574,16 @@ func (s *Server) downloadS3BackupHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Get the active metadata store
+	metadataStore := metadata.GetActiveStore()
+	if metadataStore == nil {
+		log.Printf("Metadata store not available")
+		http.Error(w, "Metadata store not available", http.StatusServiceUnavailable)
+		return
+	}
+
 	// Check if the backup exists
-	backup, exists := metadata.DefaultStore.GetBackupByID(backupID)
+	backup, exists := metadataStore.GetBackupByID(backupID)
 	if !exists {
 		http.Error(w, fmt.Sprintf("Backup with ID %s not found", backupID), http.StatusNotFound)
 		return
@@ -469,6 +652,12 @@ func (s *Server) runRetentionHandler(w http.ResponseWriter, r *http.Request) {
 	// This should be a POST request
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	
+	// Check if scheduler is available
+	if s.scheduler == nil {
+		http.Error(w, "Scheduler not configured", http.StatusInternalServerError)
 		return
 	}
 	

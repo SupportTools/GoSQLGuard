@@ -1,0 +1,8 @@
+services:
+  mysql-service:
+    ports:
+      - "33306:3306"  # Use 33306 instead of 3306
+  
+  postgres-service:
+    ports:
+      - "54332:5432"  # Use 54332 instead of 5432

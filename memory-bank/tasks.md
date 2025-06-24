@@ -17,6 +17,48 @@ Each task is defined with the following attributes:
 
 ## Completed Tasks
 
+### CT-12: Database-Driven Configuration System
+- **Priority**: High
+- **Description**: Replace file-based configuration with database-driven configuration
+- **Complexity**: Complex
+- **Dependencies**: None
+- **Status**: Completed
+- **Acceptance Criteria**:
+  - Remove dependency on config.yaml files ✓
+  - Load all configuration from environment variables ✓
+  - Store server and schedule configurations in MySQL metadata database ✓
+  - Remove ConfigMap from Helm deployment ✓
+  - Maintain backward compatibility with existing deployments ✓
+  - Dynamic reloading of schedules from database ✓
+- **Implementation Details**:
+  - Modified main.go to load configuration from environment only
+  - Updated config package to remove file loading logic
+  - Enhanced MySQL metadata store to handle server and schedule data
+  - Modified scheduler to reload schedules dynamically
+  - Updated Helm charts to remove ConfigMap references
+  - All configuration now comes from environment variables and database
+
+### CT-13: Schedule Management UI
+- **Priority**: High
+- **Description**: Enable schedule editing through the admin UI
+- **Complexity**: Moderate
+- **Dependencies**: CT-12
+- **Status**: Completed
+- **Acceptance Criteria**:
+  - View current schedules in the UI ✓
+  - Edit schedule cron expressions ✓
+  - Enable/disable schedules ✓
+  - Changes take effect immediately without restart ✓
+  - Validation of cron expressions ✓
+- **Implementation Details**:
+  - Created schedule management API endpoints
+  - Added schedule editing interface to configuration page
+  - Implemented dynamic schedule reloading in scheduler
+  - Added cron expression validation
+  - Fixed hourly schedule to run at top of hour (0 * * * *)
+
+## Completed Tasks
+
 ### CT-01: Multi-Server Backup Support
 - **Priority**: High
 - **Description**: Implement support for backing up multiple database servers in a single configuration
@@ -218,13 +260,13 @@ Each task is defined with the following attributes:
 - **Description**: Add UI controls to configure MySQL dump options through the admin interface
 - **Complexity**: Moderate
 - **Dependencies**: None
-- **Status**: Partially Completed
+- **Status**: Completed
 - **Acceptance Criteria**:
   - UI controls for configuring global MySQL dump options ✓
   - Backup-type specific configuration in the UI ✓
   - Input validation for valid mysqldump options ✓
   - Per-option help text explaining each mysqldump parameter ✓
-  - Save and apply functionality that works without application restart ⚠️ (UI created, backend needs config persistence)
+  - Save and apply functionality that works without application restart ✓
   - Preview of generated mysqldump command ✓
 - **Implementation Details**:
   - Created comprehensive MySQL options configuration page
@@ -232,7 +274,7 @@ Each task is defined with the following attributes:
   - Implemented command preview functionality
   - API endpoints for options management (GET/POST)
   - Extended MySQLDumpOptions struct with missing fields
-  - **Note**: Configuration persistence not yet implemented - requires config file writing capability
+  - Configuration now stored in database and loaded dynamically
 
 ### ST-08: MySQL Authentication Error Handling
 - **Priority**: Medium

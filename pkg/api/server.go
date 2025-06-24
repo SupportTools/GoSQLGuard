@@ -1,38 +1,46 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/supporttools/GoSQLGuard/pkg/config"
-	"github.com/supporttools/GoSQLGuard/pkg/database/metadata"
+	dbmeta "github.com/supporttools/GoSQLGuard/pkg/database/metadata"
+	"github.com/supporttools/GoSQLGuard/pkg/metadata"
+	
+	// Database drivers
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 )
 
 // ServerHandler handles server management API endpoints
 type ServerHandler struct {
-	serverRepo *metadata.ServerRepository
+	serverRepo *dbmeta.ServerRepository
 }
 
 // NewServerHandler creates a new server handler
 func NewServerHandler() *ServerHandler {
+	log.Printf("DEBUG: Creating ServerHandler, metadata.DB is nil: %v", metadata.DB == nil)
 	if metadata.DB == nil {
 		log.Println("Warning: Database is not initialized, server management API will not work")
 		return &ServerHandler{}
 	}
 
 	return &ServerHandler{
-		serverRepo: metadata.NewServerRepository(metadata.DB),
+		serverRepo: dbmeta.NewServerRepository(metadata.DB),
 	}
 }
 
-// RegisterRoutes registers the server API routes
-func (h *ServerHandler) RegisterRoutes() {
-	http.HandleFunc("/api/servers", h.handleServers)
-	http.HandleFunc("/api/servers/test", h.handleTestConnection)
-	http.HandleFunc("/api/servers/delete", h.handleDeleteServer)
+// RegisterRoutes registers the server API routes on the provided mux
+func (h *ServerHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/servers", h.handleServers)
+	mux.HandleFunc("/api/servers/test", h.handleTestConnection)
+	mux.HandleFunc("/api/servers/delete", h.handleDeleteServer)
 }
 
 // handleServers handles GET and POST requests for server management
@@ -118,7 +126,7 @@ type serverResponse struct {
 }
 
 // convertServerToResponse converts a ServerConfig to a serverResponse
-func convertServerToResponse(server *metadata.ServerConfig) serverResponse {
+func convertServerToResponse(server *dbmeta.ServerConfig) serverResponse {
 	resp := serverResponse{
 		ID:         server.ID,
 		Name:       server.Name,
@@ -159,7 +167,7 @@ func (h *ServerHandler) createOrUpdateServer(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Create the server config
-	server := metadata.ServerConfig{
+	server := dbmeta.ServerConfig{
 		Name:       req.Name,
 		Type:       req.Type,
 		Host:       req.Host,
@@ -171,27 +179,53 @@ func (h *ServerHandler) createOrUpdateServer(w http.ResponseWriter, r *http.Requ
 
 	// Handle update vs create
 	isUpdate := false
+	var existing *dbmeta.ServerConfig
+	
+	// First check if we have an ID (explicit update)
 	if req.ID != "" {
-		// This is an update
+		// This is an update by ID
 		server.ID = req.ID
-		existing, err := h.serverRepo.GetServerByID(req.ID)
+		var err error
+		existing, err = h.serverRepo.GetServerByID(req.ID)
 		if err != nil {
 			http.Error(w, "Server not found: "+err.Error(), http.StatusNotFound)
 			return
 		}
-		server.CreatedAt = existing.CreatedAt
 		isUpdate = true
 	} else {
-		// This is a new server, generate ID
-		server.ID = uuid.New().String()
-		server.CreatedAt = time.Now()
+		// Check if a server with this name already exists
+		servers, err := h.serverRepo.GetAllServers()
+		if err != nil {
+			http.Error(w, "Failed to check existing servers: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		for _, s := range servers {
+			if s.Name == req.Name {
+				existing = &s
+				server.ID = s.ID
+				isUpdate = true
+				break
+			}
+		}
+		
+		// If not found, this is a new server
+		if !isUpdate {
+			server.ID = uuid.New().String()
+			server.CreatedAt = time.Now()
+		}
+	}
+	
+	// If updating, preserve creation time
+	if isUpdate && existing != nil {
+		server.CreatedAt = existing.CreatedAt
 	}
 
 	server.UpdatedAt = time.Now()
 
 	// Add database filters
 	for _, dbName := range req.IncludeDatabases {
-		server.DatabaseFilters = append(server.DatabaseFilters, metadata.ServerDatabaseFilter{
+		server.DatabaseFilters = append(server.DatabaseFilters, dbmeta.ServerDatabaseFilter{
 			ServerID:     server.ID,
 			FilterType:   "include",
 			DatabaseName: dbName,
@@ -200,7 +234,7 @@ func (h *ServerHandler) createOrUpdateServer(w http.ResponseWriter, r *http.Requ
 	}
 
 	for _, dbName := range req.ExcludeDatabases {
-		server.DatabaseFilters = append(server.DatabaseFilters, metadata.ServerDatabaseFilter{
+		server.DatabaseFilters = append(server.DatabaseFilters, dbmeta.ServerDatabaseFilter{
 			ServerID:     server.ID,
 			FilterType:   "exclude",
 			DatabaseName: dbName,
@@ -210,8 +244,10 @@ func (h *ServerHandler) createOrUpdateServer(w http.ResponseWriter, r *http.Requ
 
 	// Save to database
 	if isUpdate {
+		log.Printf("Updating existing server: %s (ID: %s)", server.Name, server.ID)
 		err = h.serverRepo.UpdateServer(&server)
 	} else {
+		log.Printf("Creating new server: %s (ID: %s)", server.Name, server.ID)
 		err = h.serverRepo.CreateServer(&server)
 	}
 
@@ -280,11 +316,6 @@ func (h *ServerHandler) handleDeleteServer(w http.ResponseWriter, r *http.Reques
 
 // handleTestConnection tests a database connection
 func (h *ServerHandler) handleTestConnection(w http.ResponseWriter, r *http.Request) {
-	if h.serverRepo == nil {
-		http.Error(w, "Server management is not available: database not initialized", http.StatusServiceUnavailable)
-		return
-	}
-
 	// Only allow POST method
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -298,28 +329,37 @@ func (h *ServerHandler) handleTestConnection(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// In a real implementation, we would use the server config to test the connection
-	// For example:
-	// serverCfg := configtypes.ServerConfig{
-	//     Name:       req.Name,
-	//     Type:       req.Type,
-	//     Host:       req.Host,
-	//     Port:       req.Port,
-	//     Username:   req.Username,
-	//     Password:   req.Password,
-	//     AuthPlugin: req.AuthPlugin,
-	// }
-	// err = someTestFunction(serverCfg)
-	// if err != nil {
-	//     http.Error(w, "Connection test failed: "+err.Error(), http.StatusInternalServerError)
-	//     return
-	// }
+	// Test the database connection based on type
+	var testErr error
+	var databases []string
 
-	// For now, we'll just return success
+	if req.Type == "mysql" {
+		// Test MySQL connection
+		testErr, databases = testMySQLConnection(req)
+	} else if req.Type == "postgresql" {
+		// Test PostgreSQL connection
+		testErr, databases = testPostgreSQLConnection(req)
+	} else {
+		http.Error(w, "Unsupported database type: "+req.Type, http.StatusBadRequest)
+		return
+	}
+
+	if testErr != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": "Connection test failed: " + testErr.Error(),
+		})
+		return
+	}
+
+	// Return success with list of databases
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"status":  "success",
-		"message": "Connection test successful",
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":    "success",
+		"message":   "Connection test successful",
+		"databases": databases,
 	})
 }
 
@@ -331,7 +371,7 @@ func reloadConfigurationFromDatabase() {
 	}
 
 	// Initialize server repository
-	serverRepo := metadata.NewServerRepository(metadata.DB)
+	serverRepo := dbmeta.NewServerRepository(metadata.DB)
 
 	// Get all servers from the database
 	servers, err := serverRepo.GetAllServers()
@@ -370,4 +410,104 @@ func reloadConfigurationFromDatabase() {
 	config.CFG.DatabaseServers = dbServers
 
 	log.Printf("Successfully loaded %d server configurations from the database", len(servers))
+}
+
+// testMySQLConnection tests a MySQL connection and returns any error and list of databases
+func testMySQLConnection(req serverRequest) (error, []string) {
+	// Set default port if not provided
+	port := req.Port
+	if port == "" {
+		port = "3306"
+	}
+
+	// Build connection string
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/", req.Username, req.Password, req.Host, port)
+	
+	// Add auth plugin if specified
+	if req.AuthPlugin != "" {
+		dsn += fmt.Sprintf("?auth=%s", req.AuthPlugin)
+	}
+
+	// Open connection
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return fmt.Errorf("failed to create connection: %w", err), nil
+	}
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		return fmt.Errorf("failed to ping database: %w", err), nil
+	}
+
+	// Get list of databases
+	rows, err := db.Query("SHOW DATABASES")
+	if err != nil {
+		return fmt.Errorf("failed to list databases: %w", err), nil
+	}
+	defer rows.Close()
+
+	var databases []string
+	for rows.Next() {
+		var dbName string
+		if err := rows.Scan(&dbName); err != nil {
+			continue
+		}
+		// Skip system databases
+		if dbName != "information_schema" && dbName != "mysql" && dbName != "performance_schema" && dbName != "sys" {
+			databases = append(databases, dbName)
+		}
+	}
+
+	return nil, databases
+}
+
+// testPostgreSQLConnection tests a PostgreSQL connection and returns any error and list of databases
+func testPostgreSQLConnection(req serverRequest) (error, []string) {
+	// Set default port if not provided
+	port := req.Port
+	if port == "" {
+		port = "5432"
+	}
+
+	// Build connection string
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s sslmode=disable", 
+		req.Host, port, req.Username, req.Password)
+
+	// Open connection
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return fmt.Errorf("failed to create connection: %w", err), nil
+	}
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		return fmt.Errorf("failed to ping database: %w", err), nil
+	}
+
+	// Get list of databases
+	query := `SELECT datname FROM pg_database 
+		WHERE datistemplate = false 
+		AND datname != 'postgres'
+		ORDER BY datname`
+	
+	rows, err := db.Query(query)
+	if err != nil {
+		return fmt.Errorf("failed to list databases: %w", err), nil
+	}
+	defer rows.Close()
+
+	var databases []string
+	for rows.Next() {
+		var dbName string
+		if err := rows.Scan(&dbName); err != nil {
+			continue
+		}
+		databases = append(databases, dbName)
+	}
+
+	return nil, databases
 }

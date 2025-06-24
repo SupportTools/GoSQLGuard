@@ -1,41 +1,45 @@
+version: '3.8'
+
 services:
-  # MySQL Service
+  # MySQL Service for test databases
   mysql-service:
     image: mysql:8.0
     container_name: gosqlguard-mysql
     restart: unless-stopped
-    # Use default authentication plugin
-    command: --default-authentication-plugin=mysql_native_password
     environment:
-      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_ROOT_PASSWORD: test-password
       MYSQL_DATABASE: db1
       MYSQL_USER: backup-user
       MYSQL_PASSWORD: test-password
     ports:
       - "3306:3306"
+      - "33306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./init/mysql:/docker-entrypoint-initdb.d
     networks:
       - gosqlguard_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "backup-user", "-ptest-password"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  # PostgreSQL Service
+  # PostgreSQL Service for test databases
   postgres-service:
     image: postgres:14
     container_name: gosqlguard-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: backup-user
       POSTGRES_PASSWORD: test-password
+      POSTGRES_USER: backup-user
       POSTGRES_DB: db1
     ports:
       - "5432:5432"
+      - "54332:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init/postgres:/docker-entrypoint-initdb.d
     networks:
       - gosqlguard_network
     healthcheck:
@@ -90,6 +94,27 @@ services:
     networks:
       - gosqlguard_network
 
+  # MySQL Configuration Database (Sidecar)
+  config-mysql:
+    image: mysql:8.0
+    container_name: gosqlguard-config-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: config-password
+      MYSQL_DATABASE: gosqlguard_config
+      MYSQL_USER: gosqlguard
+      MYSQL_PASSWORD: config-password
+    volumes:
+      - config_mysql_data:/var/lib/mysql
+      - ./deployments/mysql-sidecar/init:/docker-entrypoint-initdb.d
+    networks:
+      - gosqlguard_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # GoSQLGuard Service
   gosqlguard:
     build:
@@ -98,6 +123,8 @@ services:
     container_name: gosqlguard-controller
     restart: unless-stopped
     depends_on:
+      config-mysql:
+        condition: service_healthy
       mysql-service:
         condition: service_healthy
       postgres-service:
@@ -106,18 +133,14 @@ services:
         condition: service_completed_successfully
     environment:
       DEBUG: "true"
-      CONFIG_PATH: /app/test-config.yaml
-      MYSQL_PASSWORD: test-password
-      S3_ACCESS_KEY: vuGNTXWipzZrWGNbBLWW
-      S3_SECRET_KEY: O3KHT4VIkKcix02xbyZnRtAw2Nqe1jQ94hl6FDY9
-      AWS_ACCESS_KEY_ID: vuGNTXWipzZrWGNbBLWW
-      AWS_SECRET_ACCESS_KEY: O3KHT4VIkKcix02xbyZnRtAw2Nqe1jQ94hl6FDY9
-      AWS_REGION: us-central-1
-      S3_ENDPOINT: https://s3.support.tools:9000
-      S3_BUCKET: gosqlguard
-      S3_USE_SSL: "true"
+      METRICS_PORT: "8080"
+      # Configuration database connection
+      CONFIG_MYSQL_HOST: config-mysql
+      CONFIG_MYSQL_PORT: "3306"
+      CONFIG_MYSQL_DATABASE: gosqlguard_config
+      CONFIG_MYSQL_USER: gosqlguard
+      CONFIG_MYSQL_PASSWORD: config-password
     volumes:
-      - ./test-config.yaml:/app/test-config.yaml
       - gosqlguard_backups:/app/backups
       - gosqlguard_metadata:/app/metadata
     ports:
@@ -129,6 +152,7 @@ volumes:
   mysql_data:
   postgres_data:
   minio_data:
+  config_mysql_data:
   gosqlguard_backups:
   gosqlguard_metadata:
 

@@ -68,11 +68,8 @@ COPY --from=builder /metadata-recovery /usr/local/bin/metadata-recovery
 # Set working directory 
 WORKDIR /app
 
-# Create directories for configuration and backups
-RUN mkdir -p /app/config /app/data/backups/hourly
-
-# Copy configuration file
-COPY config.yaml /app/config/
+# Create directories for backups and metadata
+RUN mkdir -p /app/data/backups /app/data/metadata
 
 # Set permissions on directories
 RUN chmod -R 755 /app/data

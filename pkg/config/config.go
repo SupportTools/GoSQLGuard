@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 // MySQLConfig defines MySQL connection settings
@@ -45,6 +43,29 @@ type MySQLDumpOptionsConfig struct {
 	CustomOptions      []string `yaml:"-"`
 }
 
+// PostgreSQLDumpOptionsConfig defines configuration for pg_dump options
+type PostgreSQLDumpOptionsConfig struct {
+	Format              string   `yaml:"format"`
+	Verbose             bool     `yaml:"verbose"`
+	NoComments          bool     `yaml:"noComments"`
+	SchemaOnly          bool     `yaml:"schemaOnly"`
+	DataOnly            bool     `yaml:"dataOnly"`
+	Blobs               bool     `yaml:"blobs"`
+	NoBlobs             bool     `yaml:"noBlobs"`
+	Clean               bool     `yaml:"clean"`
+	Create              bool     `yaml:"create"`
+	IfExists            bool     `yaml:"ifExists"`
+	NoOwner             bool     `yaml:"noOwner"`
+	NoPrivileges        bool     `yaml:"noPrivileges"`
+	NoTablespaces       bool     `yaml:"noTablespaces"`
+	NoPassword          bool     `yaml:"noPassword"`
+	InsertColumns       bool     `yaml:"insertColumns"`
+	OnConflictDoNothing bool     `yaml:"onConflictDoNothing"`
+	Jobs                int      `yaml:"jobs"`
+	Compress            int      `yaml:"compress"`
+	CustomOptions       []string `yaml:"customOptions"`
+}
+
 // DatabaseServerConfig defines configuration for a single database server
 type DatabaseServerConfig struct {
 	Name             string                 `yaml:"name"`
@@ -57,6 +78,7 @@ type DatabaseServerConfig struct {
 	IncludeDatabases []string               `yaml:"includeDatabases"`
 	ExcludeDatabases []string               `yaml:"excludeDatabases"`
 	MySQLDumpOptions MySQLDumpOptionsConfig `yaml:"mysqlDumpOptions,omitempty"`
+	PostgreSQLDumpOptions PostgreSQLDumpOptionsConfig `yaml:"postgresqlDumpOptions,omitempty"`
 }
 
 // LocalConfig defines local backup settings
@@ -142,6 +164,7 @@ type AppConfig struct {
 	MetadataDB       MetadataDBConfig            `yaml:"metadata_database"`
 	BackupTypes      map[string]BackupTypeConfig `yaml:"backupTypes"`
 	MySQLDumpOptions MySQLDumpOptionsConfig      `yaml:"mysqlDumpOptions,omitempty"` // Default MySQL dump options
+	PostgreSQLDumpOptions PostgreSQLDumpOptionsConfig `yaml:"postgresqlDumpOptions,omitempty"` // Default PostgreSQL dump options
 	Debug            bool                        `yaml:"debug"`
 	ConfigFile       string                      `json:"configFile,omitempty"`
 }
@@ -149,58 +172,12 @@ type AppConfig struct {
 // CFG is the global configuration object
 var CFG AppConfig
 
-// LoadConfiguration loads configuration from config file or environment variables
+// LoadConfiguration loads configuration from environment variables only
 func LoadConfiguration() {
-	// First check if a config file path is specified
-	configFile := getEnvOrDefault("CONFIG_PATH", "/app/config/config.yaml")
-	CFG.ConfigFile = configFile
-
-	// If a config file is specified and exists, load from it
-	if configFile != "" {
-		if _, err := os.Stat(configFile); err == nil {
-			if err := loadFromYamlFile(configFile); err == nil {
-				log.Printf("Configuration loaded from file: %s", configFile)
-				return
-			} else {
-				log.Printf("Error loading configuration from file: %v. Falling back to environment variables.", err)
-			}
-		} else {
-			log.Printf("Config file not found: %s. Falling back to environment variables.", configFile)
-		}
-	}
-
-	// Fall back to environment variables
+	log.Println("Loading configuration from environment variables...")
 	loadFromEnvironment()
 }
 
-// loadFromYamlFile loads the configuration from a YAML file
-func loadFromYamlFile(filePath string) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	// Replace environment variables in the YAML content
-	content := os.ExpandEnv(string(data))
-
-	if err := yaml.Unmarshal([]byte(content), &CFG); err != nil {
-		return fmt.Errorf("failed to parse config file: %w", err)
-	}
-
-	// Set default values for any unspecified fields
-	setDefaults()
-
-	// Add the ConfigFile to our structure (it's not in the YAML)
-	CFG.ConfigFile = filePath
-
-	// After loading config, print it in a structured way
-	if CFG.Debug {
-		log.Printf("Configuration Loaded from file: %s", filePath)
-		DisplayConfiguration()
-	}
-
-	return nil
-}
 
 // loadFromEnvironment loads configuration from environment variables
 func loadFromEnvironment() {
@@ -674,7 +651,7 @@ func ValidateConfig() error {
 	}
 
 	for name, backupType := range CFG.BackupTypes {
-		if backupType.Schedule == "" {
+		if backupType.Schedule == "" && name != "manual" {
 			return fmt.Errorf("backup type %s requires a schedule", name)
 		}
 

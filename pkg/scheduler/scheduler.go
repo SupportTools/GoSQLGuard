@@ -16,6 +16,7 @@ type Scheduler struct {
 	cronScheduler *cron.Cron
 	backupManager *backup.Manager
 	cfg           *config.AppConfig
+	jobIDs        map[string]cron.EntryID // Track job IDs for dynamic updates
 }
 
 // NewScheduler creates a new scheduler
@@ -24,6 +25,7 @@ func NewScheduler(backupManager *backup.Manager) (*Scheduler, error) {
 		cronScheduler: cron.New(),
 		backupManager: backupManager,
 		cfg:           &config.CFG,
+		jobIDs:        make(map[string]cron.EntryID),
 	}, nil
 }
 
@@ -48,12 +50,15 @@ func (s *Scheduler) SetupJobs() error {
 		}
 
 		// Add the cron job with the specified schedule
-		_, err := s.cronScheduler.AddFunc(typeConfig.Schedule, backupFunc(backupType))
+		jobID, err := s.cronScheduler.AddFunc(typeConfig.Schedule, backupFunc(backupType))
 		if err != nil {
 			log.Printf("Failed to schedule %s backup with cron expression '%s': %v",
 				backupType, typeConfig.Schedule, err)
 			continue
 		}
+
+		// Store the job ID for later updates
+		s.jobIDs[backupType] = jobID
 
 		log.Printf("Scheduled %s backup with cron expression: %s", backupType, typeConfig.Schedule)
 	}
@@ -88,6 +93,27 @@ func (s *Scheduler) WaitForever() {
 	// Create a channel that never receives any values to block forever
 	blockForever := make(chan struct{})
 	<-blockForever
+}
+
+// ReloadSchedules removes all existing jobs and re-creates them based on current configuration
+func (s *Scheduler) ReloadSchedules() error {
+	log.Println("Reloading backup schedules...")
+	
+	// Remove all existing backup jobs
+	for backupType, jobID := range s.jobIDs {
+		s.cronScheduler.Remove(jobID)
+		delete(s.jobIDs, backupType)
+		log.Printf("Removed schedule for %s backup", backupType)
+	}
+	
+	// Re-setup jobs with new configuration
+	err := s.SetupJobs()
+	if err != nil {
+		return fmt.Errorf("failed to reload schedules: %w", err)
+	}
+	
+	log.Println("Successfully reloaded backup schedules")
+	return nil
 }
 
 // RunOnce runs a single backup of the specified type

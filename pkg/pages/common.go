@@ -3,6 +3,7 @@ package pages
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -65,6 +66,14 @@ func generateCommonTemplate() *template.Template {
 	funcs := template.FuncMap{
 		"formatTime": func(t time.Time) string {
 			return t.Format("2006-01-02 15:04:05")
+		},
+		"json": func(v interface{}) template.JS {
+			// Convert the value to JSON for safe embedding in JavaScript
+			b, err := json.Marshal(v)
+			if err != nil {
+				return template.JS("null")
+			}
+			return template.JS(b)
 		},
 		"formatBytes": func(v interface{}) string {
 			switch val := v.(type) {

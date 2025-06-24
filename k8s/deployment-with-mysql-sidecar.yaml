@@ -19,8 +19,6 @@ spec:
       - name: gosqlguard
         image: your-registry/gosqlguard:latest
         env:
-        - name: CONFIG_PATH
-          value: "/app/config/config.yaml"
         - name: MYSQL_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -55,10 +53,6 @@ spec:
         volumeMounts:
         - name: backup-storage
           mountPath: /backups
-        - name: config-volume
-          mountPath: /app/config
-        - name: mysql-init-scripts
-          mountPath: /docker-entrypoint-initdb.d
         ports:
         - containerPort: 8080
           name: metrics
@@ -150,11 +144,6 @@ spec:
       - name: mysql-data
         persistentVolumeClaim:
           claimName: gosqlguard-mysql-data
-      
-      # ConfigMap for GoSQLGuard configuration
-      - name: config-volume
-        configMap:
-          name: gosqlguard-config
       
       # ConfigMap for MySQL initialization scripts
       - name: mysql-init-scripts
