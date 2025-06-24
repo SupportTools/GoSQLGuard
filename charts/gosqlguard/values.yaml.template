@@ -152,3 +152,28 @@ ingress:
         - path: /
           pathType: Prefix
   tls: []
+
+# MySQL subchart configuration for metadata storage
+mysql:
+  enabled: true
+  auth:
+    rootPassword: "changeme"
+    database: "gosqlguard_metadata"
+    username: "gosqlguard"
+    password: "changeme"
+  primary:
+    persistence:
+      enabled: true
+      size: "8Gi"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
