@@ -9,7 +9,6 @@ import (
 )
 
 // Provider represents a database provider interface
-
 type Provider interface {
 	// Name returns the provider name (e.g., "mysql", "postgresql")
 	Name() string
