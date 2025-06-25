@@ -85,7 +85,11 @@ func (h *BackupsHandler) handleBackups(w http.ResponseWriter, r *http.Request) {
 
 	// Return paginated response
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		// Log the error but don't try to write another response
+		// as headers are already sent
+		fmt.Printf("Error encoding response: %v\n", err)
+	}
 }
 
 // handleBackupsLegacy handles non-paginated backup queries for file-based store
@@ -168,7 +172,11 @@ func (h *BackupsHandler) handleBackupsLegacy(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		// Log the error but don't try to write another response
+		// as headers are already sent
+		fmt.Printf("Error encoding response: %v\n", err)
+	}
 }
 
 // handleBackupStats handles optimized stats queries
@@ -184,7 +192,11 @@ func (h *BackupsHandler) handleBackupStats(w http.ResponseWriter, r *http.Reques
 		// Fall back to regular stats for file-based store
 		stats := metadata.DefaultStore.GetStats()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(stats)
+		if err := json.NewEncoder(w).Encode(stats); err != nil {
+			// Log the error but don't try to write another response
+			// as headers are already sent
+			fmt.Printf("Error encoding response: %v\n", err)
+		}
 		return
 	}
 
@@ -196,7 +208,11 @@ func (h *BackupsHandler) handleBackupStats(w http.ResponseWriter, r *http.Reques
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	if err := json.NewEncoder(w).Encode(stats); err != nil {
+		// Log the error but don't try to write another response
+		// as headers are already sent
+		fmt.Printf("Error encoding response: %v\n", err)
+	}
 }
 
 // Helper functions

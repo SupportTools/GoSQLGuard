@@ -299,22 +299,26 @@ func processRecoveredBackups(backups []RecoveredBackup) {
 		}
 
 		// Update status
-		metadata.DefaultStore.UpdateBackupStatus(
+		if err := metadata.DefaultStore.UpdateBackupStatus(
 			backupMeta.ID,
 			types.StatusSuccess,
 			backupMeta.LocalPaths,
 			backup.Size,
 			"",
-		)
+		); err != nil {
+			log.Printf("Error updating backup status for %s: %v", backupMeta.ID, err)
+		}
 
 		// Update S3 status if applicable
 		if backup.IsS3 {
-			metadata.DefaultStore.UpdateS3UploadStatus(
+			if err := metadata.DefaultStore.UpdateS3UploadStatus(
 				backupMeta.ID,
 				types.StatusSuccess,
 				backupMeta.S3Keys,
 				"",
-			)
+			); err != nil {
+				log.Printf("Error updating S3 upload status for %s: %v", backupMeta.ID, err)
+			}
 		}
 
 		if *verbose {
