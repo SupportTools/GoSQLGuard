@@ -174,12 +174,12 @@ func (s *Store) save() error {
 
 	// Ensure directory exists
 	dir := filepath.Dir(s.filepath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("failed to create directory for metadata: %w", err)
 	}
 
 	// Write to file
-	if err := os.WriteFile(s.filepath, data, 0644); err != nil {
+	if err := os.WriteFile(s.filepath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write metadata file: %w", err)
 	}
 

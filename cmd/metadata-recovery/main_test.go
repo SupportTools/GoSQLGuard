@@ -136,7 +136,7 @@ func TestScanLocalStorage(t *testing.T) {
 
 	for _, tf := range testFiles {
 		fullPath := filepath.Join(tempDir, tf.path)
-		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+		err := os.MkdirAll(filepath.Dir(fullPath), 0750)
 		require.NoError(t, err)
 		
 		err = os.WriteFile(fullPath, []byte(tf.content), 0644)

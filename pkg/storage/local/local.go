@@ -34,7 +34,7 @@ func (c *Client) EnsureBackupPath(backupType string) (string, error) {
 	backupDir := filepath.Join(c.cfg.Local.BackupDirectory, backupType)
 
 	// Ensure the directory exists
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
+	if err := os.MkdirAll(backupDir, 0750); err != nil {
 		return "", fmt.Errorf("failed to create backup directory %s: %w", backupDir, err)
 	}
 

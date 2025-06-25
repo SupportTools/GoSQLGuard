@@ -369,7 +369,7 @@ func (m *Manager) createLogFile(id string) (string, *os.File, error) {
 	}
 
 	// Ensure log directory exists
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(logDir, 0750); err != nil {
 		return "", nil, fmt.Errorf("failed to create log directory: %w", err)
 	}
 
@@ -431,7 +431,7 @@ func (m *Manager) backupDatabase(serverName, serverType, database, backupType st
 		primaryBackupPath = localPaths["by-server"]
 
 		// Ensure the directory exists
-		err := os.MkdirAll(filepath.Dir(primaryBackupPath), 0755)
+		err := os.MkdirAll(filepath.Dir(primaryBackupPath), 0750)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to create backup directory: %v", err)
 			if logFile != nil {
@@ -677,7 +677,7 @@ func (m *Manager) backupDatabase(serverName, serverType, database, backupType st
 		// We already created the primary file (by-server), now copy to by-type
 		if byTypePath, ok := localPaths["by-type"]; ok {
 			// Create parent directory
-			if err := os.MkdirAll(filepath.Dir(byTypePath), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(byTypePath), 0750); err != nil {
 				log.Printf("Warning: Failed to create directory for by-type backup: %v", err)
 			} else {
 				// Copy the file
