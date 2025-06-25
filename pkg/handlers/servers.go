@@ -36,7 +36,10 @@ func ServersHandler(w http.ResponseWriter, r *http.Request) {
 			for _, backup := range allBackups {
 				if backup.ServerName == server.Name {
 					stats.TotalBackups++
-					stats.TotalSize += uint64(backup.Size)
+					// Safely convert int64 to uint64, treating negative values as 0
+					if backup.Size >= 0 {
+						stats.TotalSize += uint64(backup.Size)
+					}
 
 					// Track unique databases
 					if !databaseMap[backup.Database] {

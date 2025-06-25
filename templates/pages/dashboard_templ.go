@@ -438,9 +438,9 @@ func RenderRecentBackups(backups []metadataTypes.BackupMeta) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var20 string
-				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(humanize.Bytes(uint64(backup.Size)))
+				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(humanize.Bytes(safeUint64(backup.Size)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/pages/dashboard.templ`, Line: 255, Col: 48}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/pages/dashboard.templ`, Line: 255, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 				if templ_7745c5c3_Err != nil {
@@ -532,14 +532,33 @@ func getUint64Value(v interface{}) uint64 {
 	case uint64:
 		return val
 	case int64:
+		// Check for negative values before conversion
+		if val < 0 {
+			return 0
+		}
 		return uint64(val)
 	case int:
+		// Check for negative values before conversion
+		if val < 0 {
+			return 0
+		}
 		return uint64(val)
 	case float64:
+		// Check for negative or too large values before conversion
+		if val < 0 || val > float64(^uint64(0)) {
+			return 0
+		}
 		return uint64(val)
 	default:
 		return 0
 	}
+}
+
+func safeUint64(val int64) uint64 {
+	if val < 0 {
+		return 0
+	}
+	return uint64(val)
 }
 
 var _ = templruntime.GeneratedTemplate

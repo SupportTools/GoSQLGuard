@@ -55,7 +55,9 @@ func getS3Client() (*s3.Client, error) {
 
 	// Configure TLS settings if needed
 	if config.CFG.S3.UseSSL {
-		tlsConfig := &tls.Config{}
+		tlsConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
 
 		// Load custom CA if specified
 		if config.CFG.S3.CustomCAPath != "" && !config.CFG.S3.SkipCertValidation {

@@ -196,7 +196,8 @@ func (h *S3ConfigHandler) testS3Connection(req S3TestRequest) error {
 			// Create a custom HTTP client with TLS configuration
 			tr := &http.Transport{
 				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true, // Skip certificate verification for now
+					MinVersion:         tls.VersionTLS12,
+					InsecureSkipVerify: req.InsecureSSL, // #nosec G402 - Only skip if explicitly requested by user
 				},
 			}
 			httpClient := &http.Client{
@@ -204,7 +205,9 @@ func (h *S3ConfigHandler) testS3Connection(req S3TestRequest) error {
 				Timeout:   30 * time.Second,
 			}
 			awsConfig.HTTPClient = httpClient
-			log.Printf("Using custom HTTP client with InsecureSkipVerify for endpoint: %s", req.Endpoint)
+			if req.InsecureSSL {
+				log.Printf("WARNING: Using InsecureSkipVerify=true for endpoint: %s", req.Endpoint)
+			}
 		}
 	}
 

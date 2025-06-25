@@ -80,10 +80,22 @@ func generateCommonTemplate() *template.Template {
 			case uint64:
 				return humanize.Bytes(val)
 			case int64:
+				// Check for negative values before conversion
+				if val < 0 {
+					return "0 B"
+				}
 				return humanize.Bytes(uint64(val))
 			case int:
+				// Check for negative values before conversion
+				if val < 0 {
+					return "0 B"
+				}
 				return humanize.Bytes(uint64(val))
 			case float64:
+				// Check for negative or too large values before conversion
+				if val < 0 || val > float64(^uint64(0)) {
+					return "0 B"
+				}
 				return humanize.Bytes(uint64(val))
 			default:
 				return "0 B"

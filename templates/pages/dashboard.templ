@@ -252,7 +252,7 @@ templ RenderRecentBackups(backups []metadataTypes.BackupMeta) {
 							<td>{ backup.Database }</td>
 							<td>{ backup.BackupType }</td>
 							<td>{ backup.CreatedAt.Format("2006-01-02 15:04:05") }</td>
-							<td>{ humanize.Bytes(uint64(backup.Size)) }</td>
+							<td>{ humanize.Bytes(safeUint64(backup.Size)) }</td>
 							<td>
 								<span class={ "badge", getStatusBadgeClass(string(backup.Status)) }>
 									{ string(backup.Status) }
@@ -301,12 +301,31 @@ func getUint64Value(v interface{}) uint64 {
 	case uint64:
 		return val
 	case int64:
+		// Check for negative values before conversion
+		if val < 0 {
+			return 0
+		}
 		return uint64(val)
 	case int:
+		// Check for negative values before conversion
+		if val < 0 {
+			return 0
+		}
 		return uint64(val)
 	case float64:
+		// Check for negative or too large values before conversion
+		if val < 0 || val > float64(^uint64(0)) {
+			return 0
+		}
 		return uint64(val)
 	default:
 		return 0
 	}
+}
+
+func safeUint64(val int64) uint64 {
+	if val < 0 {
+		return 0
+	}
+	return uint64(val)
 }
