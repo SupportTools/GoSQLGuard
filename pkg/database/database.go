@@ -38,23 +38,15 @@ func Initialize() error {
 				portInt = 3306 // Default MySQL port
 			}
 
-			// Create and configure MySQL provider
-			mysqlFactory, ok := factory.(common.ProviderFactory)
-			if !ok {
-				return fmt.Errorf("invalid MySQL provider factory type")
-			}
-
 			// Update factory fields
-			// This requires type asserting to the specific factory type
-			mysqlFactoryImpl, ok := mysqlFactory.(*mysql.Factory)
-			if ok {
-				mysqlFactoryImpl.Host = config.CFG.MySQL.Host
-				mysqlFactoryImpl.Port = portInt
-				mysqlFactoryImpl.User = config.CFG.MySQL.Username
-				mysqlFactoryImpl.Password = config.CFG.MySQL.Password
-				mysqlFactoryImpl.IncludeDatabases = config.CFG.MySQL.IncludeDatabases
-				mysqlFactoryImpl.ExcludeDatabases = config.CFG.MySQL.ExcludeDatabases
-			}
+			// The factory interface is already a *mysql.Factory
+			mysqlFactory := factory.(*mysql.Factory)
+			mysqlFactory.Host = config.CFG.MySQL.Host
+			mysqlFactory.Port = portInt
+			mysqlFactory.User = config.CFG.MySQL.Username
+			mysqlFactory.Password = config.CFG.MySQL.Password
+			mysqlFactory.IncludeDatabases = config.CFG.MySQL.IncludeDatabases
+			mysqlFactory.ExcludeDatabases = config.CFG.MySQL.ExcludeDatabases
 
 			// Create provider instance
 			provider, err := mysqlFactory.Create()
@@ -80,22 +72,14 @@ func Initialize() error {
 				portInt = 5432 // Default PostgreSQL port
 			}
 
-			// Create and configure PostgreSQL provider
-			postgresFactory, ok := factory.(common.ProviderFactory)
-			if !ok {
-				return fmt.Errorf("invalid PostgreSQL provider factory type")
-			}
-
 			// Update factory fields
-			// This requires type asserting to the specific factory type
-			postgresFactoryImpl, ok := postgresFactory.(*postgresql.Factory)
-			if ok {
-				postgresFactoryImpl.Host = config.CFG.PostgreSQL.Host
-				postgresFactoryImpl.Port = portInt
-				postgresFactoryImpl.User = config.CFG.PostgreSQL.Username
-				postgresFactoryImpl.Password = config.CFG.PostgreSQL.Password
-				postgresFactoryImpl.Databases = config.CFG.PostgreSQL.Databases
-			}
+			// The factory interface is already a *postgresql.Factory
+			postgresFactory := factory.(*postgresql.Factory)
+			postgresFactory.Host = config.CFG.PostgreSQL.Host
+			postgresFactory.Port = portInt
+			postgresFactory.User = config.CFG.PostgreSQL.Username
+			postgresFactory.Password = config.CFG.PostgreSQL.Password
+			postgresFactory.Databases = config.CFG.PostgreSQL.Databases
 
 			// Create provider instance
 			provider, err := postgresFactory.Create()

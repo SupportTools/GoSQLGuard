@@ -48,7 +48,6 @@ type Store struct {
 	mutex    sync.RWMutex
 	filepath string
 	s3Key    string
-	s3Client interface{} // We'll define this interface when connecting to S3
 }
 
 // DefaultStore is the global metadata store instance

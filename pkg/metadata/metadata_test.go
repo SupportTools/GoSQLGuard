@@ -2,7 +2,6 @@ package metadata
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -18,7 +17,7 @@ import (
 // TestFileStoreInitialization tests that the file store initializes correctly
 func TestFileStoreInitialization(t *testing.T) {
 	// Create temporary directory
-	tmpDir, err := ioutil.TempDir("", "metadata_test")
+	tmpDir, err := os.MkdirTemp("", "metadata_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -40,7 +39,7 @@ func TestFileStoreInitialization(t *testing.T) {
 
 // TestFileStoreSaveAndLoad tests saving and loading metadata
 func TestFileStoreSaveAndLoad(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "metadata_test")
+	tmpDir, err := os.MkdirTemp("", "metadata_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -89,14 +88,14 @@ func TestFileStoreSaveAndLoad(t *testing.T) {
 
 // TestFileStoreCorruptedFile tests handling of corrupted metadata files
 func TestFileStoreCorruptedFile(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "metadata_test")
+	tmpDir, err := os.MkdirTemp("", "metadata_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
 	metadataPath := filepath.Join(tmpDir, "corrupted.json")
 
 	// Write corrupted JSON
-	err = ioutil.WriteFile(metadataPath, []byte(`{"backups": [{"id": "test", "status": "invalid json`), 0644)
+	err = os.WriteFile(metadataPath, []byte(`{"backups": [{"id": "test", "status": "invalid json`), 0644)
 	require.NoError(t, err)
 
 	// Try to load
@@ -114,7 +113,7 @@ func TestFileStoreCorruptedFile(t *testing.T) {
 
 // TestFileStorePartialWrite tests recovery from partial writes
 func TestFileStorePartialWrite(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "metadata_test")
+	tmpDir, err := os.MkdirTemp("", "metadata_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -134,12 +133,12 @@ func TestFileStorePartialWrite(t *testing.T) {
 	require.NoError(t, err)
 
 	// Read the good data
-	goodData, err := ioutil.ReadFile(store.filepath)
+	goodData, err := os.ReadFile(store.filepath)
 	require.NoError(t, err)
 
 	// Simulate partial write by truncating file
 	truncatedData := goodData[:len(goodData)/2]
-	err = ioutil.WriteFile(store.filepath, truncatedData, 0644)
+	err = os.WriteFile(store.filepath, truncatedData, 0644)
 	require.NoError(t, err)
 
 	// Try to load - should fail
@@ -154,7 +153,7 @@ func TestFileStorePartialWrite(t *testing.T) {
 
 	// Recovery: write backup file
 	backupPath := store.filepath + ".backup"
-	err = ioutil.WriteFile(backupPath, goodData, 0644)
+	err = os.WriteFile(backupPath, goodData, 0644)
 	require.NoError(t, err)
 
 	// Implement recovery logic (this would be part of the actual recovery implementation)
@@ -173,7 +172,7 @@ func TestFileStorePartialWrite(t *testing.T) {
 
 // TestFileStoreNonExistentFile tests creating metadata when file doesn't exist
 func TestFileStoreNonExistentFile(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "metadata_test")
+	tmpDir, err := os.MkdirTemp("", "metadata_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -192,7 +191,7 @@ func TestFileStoreNonExistentFile(t *testing.T) {
 	assert.FileExists(t, store.filepath)
 
 	// Verify empty metadata was saved
-	data, err := ioutil.ReadFile(store.filepath)
+	data, err := os.ReadFile(store.filepath)
 	require.NoError(t, err)
 
 	var loaded Data
@@ -204,7 +203,7 @@ func TestFileStoreNonExistentFile(t *testing.T) {
 
 // TestFileStoreConcurrentAccess tests thread-safe access to metadata
 func TestFileStoreConcurrentAccess(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "metadata_test")
+	tmpDir, err := os.MkdirTemp("", "metadata_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -270,7 +269,7 @@ func TestFileStoreConcurrentAccess(t *testing.T) {
 
 // TestFileStorePersistenceAcrossRestarts simulates app restart
 func TestFileStorePersistenceAcrossRestarts(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "metadata_test")
+	tmpDir, err := os.MkdirTemp("", "metadata_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -320,7 +319,7 @@ func TestFileStorePersistenceAcrossRestarts(t *testing.T) {
 
 // TestFileStoreMetadataIntegrity tests metadata calculations remain consistent
 func TestFileStoreMetadataIntegrity(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "metadata_test")
+	tmpDir, err := os.MkdirTemp("", "metadata_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 

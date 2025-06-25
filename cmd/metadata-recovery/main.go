@@ -22,7 +22,6 @@ import (
 
 var (
 	// Flags
-	outputFile   = flag.String("output", "", "Output file for recovered metadata (default: auto-detect from config)")
 	dryRun       = flag.Bool("dry-run", false, "Perform a dry run without writing metadata")
 	verbose      = flag.Bool("verbose", false, "Enable verbose logging")
 	scanLocal    = flag.Bool("local", true, "Scan local storage for backups")

@@ -110,48 +110,8 @@ func getS3Client() (*s3.Client, error) {
 			log.Printf("  AWS_S3_FORCE_PATH_STYLE=%v", config.CFG.S3.PathStyle)
 		}
 
-		// Configure custom endpoint with path-style addressing for S3-compatible storage
-		customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-			// Handle both "s3" and "S3" service names (case-insensitive match)
-			if strings.ToLower(service) == "s3" {
-				// Use configured region if the provided region is empty
-				regionToUse := region
-				if regionToUse == "" {
-					regionToUse = config.CFG.S3.Region
-					if config.CFG.Debug {
-						log.Printf("S3 Debug: Empty region received, using configured region: %s", regionToUse)
-					}
-				}
-
-				if config.CFG.Debug {
-					log.Printf("S3 Debug: Creating endpoint for service=%s, region=%s", service, regionToUse)
-					log.Printf("S3 Debug: Endpoint URL=%s", config.CFG.S3.Endpoint)
-				}
-
-				return aws.Endpoint{
-					URL:               config.CFG.S3.Endpoint,
-					SigningRegion:     regionToUse,
-					HostnameImmutable: true,
-					// Force path-style addressing (bucket name in the path, not in the hostname)
-					// This is required for many S3-compatible storage systems
-					SigningName: "s3",
-				}, nil
-			}
-
-			// Log for unknown services
-			errMsg := fmt.Sprintf("unknown service: %s", service)
-			log.Printf("S3 Debug: Error resolving endpoint: %s", errMsg)
-
-			// Return an error for other services
-			return aws.Endpoint{}, fmt.Errorf("%s", errMsg)
-		})
-
-		// Add endpoint resolver to options
-		sdkOptions = append(sdkOptions,
-			awsconfig.WithEndpointResolverWithOptions(customResolver),
-			// S3 client specific configuration
-			awsconfig.WithClientLogMode(aws.LogRetries),
-		)
+		// For custom endpoints, we'll configure the S3 client options directly
+		// The endpoint will be set when creating the S3 client
 	} else {
 		// Standard AWS S3 - add region
 		sdkOptions = append(sdkOptions, awsconfig.WithRegion(config.CFG.S3.Region))
@@ -163,11 +123,22 @@ func getS3Client() (*s3.Client, error) {
 		return nil, fmt.Errorf("AWS SDK config initialization error: %w", err)
 	}
 
-	// Create S3 client
-	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		// Force path-style URLs (bucket name in path, not hostname)
-		o.UsePathStyle = true
-	})
+	// Create S3 client with custom options
+	s3Options := []func(*s3.Options){
+		func(o *s3.Options) {
+			// Force path-style URLs (bucket name in path, not hostname)
+			o.UsePathStyle = true
+		},
+	}
+
+	// Add custom endpoint if configured
+	if config.CFG.S3.Endpoint != "" {
+		s3Options = append(s3Options, func(o *s3.Options) {
+			o.BaseEndpoint = aws.String(config.CFG.S3.Endpoint)
+		})
+	}
+
+	s3Client := s3.NewFromConfig(awsCfg, s3Options...)
 
 	return s3Client, nil
 }

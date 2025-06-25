@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -93,7 +92,7 @@ func TestBackupFilePattern(t *testing.T) {
 
 func TestScanLocalStorage(t *testing.T) {
 	// Create temporary directory structure
-	tempDir, err := ioutil.TempDir("", "gosqlguard_recovery_test")
+	tempDir, err := os.MkdirTemp("", "gosqlguard_recovery_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
@@ -140,7 +139,7 @@ func TestScanLocalStorage(t *testing.T) {
 		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
 		require.NoError(t, err)
 		
-		err = ioutil.WriteFile(fullPath, []byte(tf.content), 0644)
+		err = os.WriteFile(fullPath, []byte(tf.content), 0644)
 		require.NoError(t, err)
 	}
 

@@ -4,7 +4,6 @@
 package metadata
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -25,7 +24,7 @@ func TestMetadataPersistenceIntegration(t *testing.T) {
 
 	// Test file-based storage
 	t.Run("FileStorage", func(t *testing.T) {
-		tmpDir, err := ioutil.TempDir("", "metadata_integration")
+		tmpDir, err := os.MkdirTemp("", "metadata_integration")
 		require.NoError(t, err)
 		defer os.RemoveAll(tmpDir)
 
@@ -131,7 +130,7 @@ func TestMetadataCorruptionRecovery(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	tmpDir, err := ioutil.TempDir("", "metadata_recovery")
+	tmpDir, err := os.MkdirTemp("", "metadata_recovery")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -155,11 +154,11 @@ func TestMetadataCorruptionRecovery(t *testing.T) {
 	metadataPath := filepath.Join(tmpDir, "metadata.json")
 
 	// Read good data
-	goodData, err := ioutil.ReadFile(metadataPath)
+	goodData, err := os.ReadFile(metadataPath)
 	require.NoError(t, err)
 
 	// Corrupt the file
-	err = ioutil.WriteFile(metadataPath, []byte("corrupted data"), 0644)
+	err = os.WriteFile(metadataPath, []byte("corrupted data"), 0644)
 	require.NoError(t, err)
 
 	// Try to reinitialize - should handle corruption gracefully
@@ -169,7 +168,7 @@ func TestMetadataCorruptionRecovery(t *testing.T) {
 	// In production, you'd want to implement recovery logic here
 
 	// Restore good data
-	err = ioutil.WriteFile(metadataPath, goodData, 0644)
+	err = os.WriteFile(metadataPath, goodData, 0644)
 	require.NoError(t, err)
 
 	// Now should work
@@ -187,7 +186,7 @@ func TestMetadataPerformance(t *testing.T) {
 		t.Skip("Skipping performance test in short mode")
 	}
 
-	tmpDir, err := ioutil.TempDir("", "metadata_performance")
+	tmpDir, err := os.MkdirTemp("", "metadata_performance")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -253,7 +252,7 @@ func TestMetadataConcurrentStress(t *testing.T) {
 		t.Skip("Skipping stress test in short mode")
 	}
 
-	tmpDir, err := ioutil.TempDir("", "metadata_stress")
+	tmpDir, err := os.MkdirTemp("", "metadata_stress")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
