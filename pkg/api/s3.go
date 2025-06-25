@@ -14,16 +14,18 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql" // MySQL driver for database connections
 	"github.com/sirupsen/logrus"
 	"github.com/supporttools/GoSQLGuard/pkg/config"
 )
 
+// S3ConfigHandler handles S3 storage configuration API endpoints
 type S3ConfigHandler struct {
 	Config *config.AppConfig
 	Logger *logrus.Logger
 }
 
+// S3ConfigRequest represents a request to configure S3 storage settings
 type S3ConfigRequest struct {
 	Enabled         bool   `json:"enabled"`
 	Region          string `json:"region"`
@@ -36,6 +38,7 @@ type S3ConfigRequest struct {
 	InsecureSSL     bool   `json:"insecure_ssl"`
 }
 
+// S3TestRequest represents a request to test S3 connectivity
 type S3TestRequest struct {
 	Region          string `json:"region"`
 	Bucket          string `json:"bucket"`
@@ -46,12 +49,14 @@ type S3TestRequest struct {
 	InsecureSSL     bool   `json:"insecure_ssl"`
 }
 
+// S3Response represents the response for S3 operations
 type S3Response struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
 }
 
+// NewS3ConfigHandler creates a new handler for S3 configuration endpoints
 func NewS3ConfigHandler(cfg *config.AppConfig, logger *logrus.Logger) *S3ConfigHandler {
 	return &S3ConfigHandler{
 		Config: cfg,
@@ -59,6 +64,7 @@ func NewS3ConfigHandler(cfg *config.AppConfig, logger *logrus.Logger) *S3ConfigH
 	}
 }
 
+// RegisterRoutes registers the S3 configuration API routes
 func (h *S3ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/s3", h.handleS3Config)
 	mux.HandleFunc("/api/s3/test", h.handleS3Test)
@@ -79,13 +85,13 @@ func (h *S3ConfigHandler) getS3Config(w http.ResponseWriter, r *http.Request) {
 	response := S3Response{
 		Success: true,
 		Data: map[string]interface{}{
-			"enabled":           h.Config.S3.Enabled,
-			"region":           h.Config.S3.Region,
-			"bucket":           h.Config.S3.Bucket,
-			"prefix":           h.Config.S3.Prefix,
-			"endpoint":         h.Config.S3.Endpoint,
-			"access_key_id":    h.Config.S3.AccessKey,
-			"use_ssl":          h.Config.S3.UseSSL,
+			"enabled":              h.Config.S3.Enabled,
+			"region":               h.Config.S3.Region,
+			"bucket":               h.Config.S3.Bucket,
+			"prefix":               h.Config.S3.Prefix,
+			"endpoint":             h.Config.S3.Endpoint,
+			"access_key_id":        h.Config.S3.AccessKey,
+			"use_ssl":              h.Config.S3.UseSSL,
 			"skip_cert_validation": h.Config.S3.SkipCertValidation,
 		},
 	}
@@ -141,7 +147,7 @@ func (h *S3ConfigHandler) handleS3Test(w http.ResponseWriter, r *http.Request) {
 		h.sendError(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 		return
 	}
-	
+
 	// Debug log the request
 	if h.Logger != nil {
 		h.Logger.Debugf("S3 test request: Region=%s, Bucket=%s, Endpoint=%s, AccessKey=%s, UseSSL=%v",
@@ -150,7 +156,7 @@ func (h *S3ConfigHandler) handleS3Test(w http.ResponseWriter, r *http.Request) {
 	// Also use standard log
 	log.Printf("S3 test request decoded - Region=%s, Bucket=%s, Endpoint=%s, AccessKeyID=%s (length=%d), SecretAccessKey=****** (length=%d), UseSSL=%v",
 		req.Region, req.Bucket, req.Endpoint, req.AccessKeyID, len(req.AccessKeyID), len(req.SecretAccessKey), req.UseSSL)
-	
+
 	// Debug: print the raw JSON
 	rawJSON, _ := json.Marshal(req)
 	log.Printf("S3 test request struct as JSON: %s", string(rawJSON))
@@ -173,7 +179,7 @@ func (h *S3ConfigHandler) testS3Connection(req S3TestRequest) error {
 	// Debug log credentials
 	log.Printf("Creating AWS credentials with AccessKey: %s (length=%d), SecretKey: ****** (length=%d)",
 		req.AccessKeyID, len(req.AccessKeyID), len(req.SecretAccessKey))
-	
+
 	// Create AWS config
 	awsConfig := &aws.Config{
 		Region:           aws.String(req.Region),
@@ -184,7 +190,7 @@ func (h *S3ConfigHandler) testS3Connection(req S3TestRequest) error {
 	if req.Endpoint != "" {
 		awsConfig.Endpoint = aws.String(req.Endpoint)
 		awsConfig.DisableSSL = aws.Bool(!req.UseSSL)
-		
+
 		// For HTTPS endpoints, we might need a custom HTTP client
 		if req.UseSSL {
 			// Create a custom HTTP client with TLS configuration
@@ -239,12 +245,12 @@ func (h *S3ConfigHandler) saveS3ConfigToMySQL() error {
 		os.Getenv("CONFIG_MYSQL_HOST"),
 		os.Getenv("CONFIG_MYSQL_PORT"),
 		os.Getenv("CONFIG_MYSQL_DATABASE"))
-	
+
 	if os.Getenv("CONFIG_MYSQL_USER") == "" {
 		// Use defaults
 		dsn = "gosqlguard:config_password@tcp(config-mysql:3306)/gosqlguard_config?charset=utf8mb4&parseTime=true"
 	}
-	
+
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to connect to config database: %w", err)
@@ -261,14 +267,14 @@ func (h *S3ConfigHandler) saveS3ConfigToMySQL() error {
 	`
 
 	configJSON, err := json.Marshal(map[string]interface{}{
-		"enabled":           h.Config.S3.Enabled,
-		"region":           h.Config.S3.Region,
-		"bucket":           h.Config.S3.Bucket,
-		"prefix":           h.Config.S3.Prefix,
-		"endpoint":         h.Config.S3.Endpoint,
-		"access_key":       h.Config.S3.AccessKey,
-		"secret_key":       h.Config.S3.SecretKey,
-		"use_ssl":          h.Config.S3.UseSSL,
+		"enabled":              h.Config.S3.Enabled,
+		"region":               h.Config.S3.Region,
+		"bucket":               h.Config.S3.Bucket,
+		"prefix":               h.Config.S3.Prefix,
+		"endpoint":             h.Config.S3.Endpoint,
+		"access_key":           h.Config.S3.AccessKey,
+		"secret_key":           h.Config.S3.SecretKey,
+		"use_ssl":              h.Config.S3.UseSSL,
 		"skip_cert_validation": h.Config.S3.SkipCertValidation,
 	})
 	if err != nil {

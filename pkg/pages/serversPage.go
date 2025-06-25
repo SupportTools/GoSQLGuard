@@ -13,23 +13,23 @@ import (
 
 // ServerPageData holds data for the servers page
 type ServerPageData struct {
-	Servers      []ServerInfo
-	LastUpdated  time.Time
+	Servers     []ServerInfo
+	LastUpdated time.Time
 }
 
 // ServerInfo holds information about a server
 type ServerInfo struct {
-	Name             string
-	Type             string
-	Host             string
-	Port             string
-	TotalBackups     int
+	Name              string
+	Type              string
+	Host              string
+	Port              string
+	TotalBackups      int
 	SuccessfulBackups int
-	FailedBackups    int
-	LastBackupTime   time.Time
-	LastBackupStatus types.BackupStatus
-	TotalSize        int64
-	Databases        []string
+	FailedBackups     int
+	LastBackupTime    time.Time
+	LastBackupStatus  types.BackupStatus
+	TotalSize         int64
+	Databases         []string
 }
 
 // ServersPage renders the server management page
@@ -229,38 +229,38 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Get backup statistics for this server
 		if metadata.DefaultStore != nil {
 			backups := metadata.DefaultStore.GetBackupsFiltered(server.Name, "", "", false)
-			
+
 			// Collect database names
 			dbMap := make(map[string]bool)
 			var lastBackup *types.BackupMeta
-			
+
 			for _, backup := range backups {
 				serverInfo.TotalBackups++
-				
+
 				if backup.Status == types.StatusSuccess {
 					serverInfo.SuccessfulBackups++
 					serverInfo.TotalSize += backup.Size
 				} else if backup.Status == types.StatusError {
 					serverInfo.FailedBackups++
 				}
-				
+
 				// Track databases
 				if backup.Database != "" {
 					dbMap[backup.Database] = true
 				}
-				
+
 				// Find the most recent backup
 				if lastBackup == nil || backup.CreatedAt.After(lastBackup.CreatedAt) {
 					lastBackup = &backup
 				}
 			}
-			
+
 			// Convert database map to slice
 			for db := range dbMap {
 				serverInfo.Databases = append(serverInfo.Databases, db)
 			}
 			sort.Strings(serverInfo.Databases)
-			
+
 			// Set last backup info
 			if lastBackup != nil {
 				serverInfo.LastBackupTime = lastBackup.CreatedAt
@@ -274,13 +274,13 @@ document.addEventListener('DOMContentLoaded', function() {
 	// If no configured servers, add servers found in metadata
 	if len(data.Servers) == 0 && metadata.DefaultStore != nil {
 		serverMap := make(map[string]*ServerInfo)
-		
+
 		backups := metadata.DefaultStore.GetBackups()
 		for _, backup := range backups {
 			if backup.ServerName == "" {
 				continue
 			}
-			
+
 			if _, exists := serverMap[backup.ServerName]; !exists {
 				serverMap[backup.ServerName] = &ServerInfo{
 					Name: backup.ServerName,
@@ -289,29 +289,29 @@ document.addEventListener('DOMContentLoaded', function() {
 					Port: "Unknown",
 				}
 			}
-			
+
 			server := serverMap[backup.ServerName]
 			server.TotalBackups++
-			
+
 			if backup.Status == types.StatusSuccess {
 				server.SuccessfulBackups++
 				server.TotalSize += backup.Size
 			} else if backup.Status == types.StatusError {
 				server.FailedBackups++
 			}
-			
+
 			// Update last backup info
 			if server.LastBackupTime.IsZero() || backup.CreatedAt.After(server.LastBackupTime) {
 				server.LastBackupTime = backup.CreatedAt
 				server.LastBackupStatus = backup.Status
 			}
 		}
-		
+
 		// Convert map to slice
 		for _, server := range serverMap {
 			data.Servers = append(data.Servers, *server)
 		}
-		
+
 		// Sort by name
 		sort.Slice(data.Servers, func(i, j int) bool {
 			return data.Servers[i].Name < data.Servers[j].Name

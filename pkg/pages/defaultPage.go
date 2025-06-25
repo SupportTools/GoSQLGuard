@@ -11,13 +11,13 @@ import (
 
 // DashboardData holds data for the dashboard page
 type DashboardData struct {
-	Stats          map[string]interface{}
-	RecentBackups  []types.BackupMeta
-	Databases      []string
-	BackupTypes    map[string]config.BackupTypeConfig
-	LocalEnabled   bool
-	S3Enabled      bool
-	LastUpdated    time.Time
+	Stats         map[string]interface{}
+	RecentBackups []types.BackupMeta
+	Databases     []string
+	BackupTypes   map[string]config.BackupTypeConfig
+	LocalEnabled  bool
+	S3Enabled     bool
+	LastUpdated   time.Time
 }
 
 // DefaultPage renders the main dashboard
@@ -250,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	// Get data for the dashboard
 	var dashboardData DashboardData
-	
+
 	// Get statistics
 	dashboardData.Stats = make(map[string]interface{})
 	dashboardData.Stats["totalCount"] = 0
@@ -262,13 +262,13 @@ document.addEventListener('DOMContentLoaded', () => {
 		"error":   0,
 		"deleted": 0,
 	}
-	
+
 	if metadata.DefaultStore != nil {
 		stats := metadata.DefaultStore.GetStats()
 		if stats != nil {
 			dashboardData.Stats = stats
 		}
-		
+
 		// Get recent backups (last 5)
 		allBackups := metadata.DefaultStore.GetBackups()
 		// Sort by creation time (most recent first)
@@ -279,7 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			dashboardData.RecentBackups = allBackups
 		}
 	}
-	
+
 	// Get configuration info
 	// Use includeDatabases first if available, otherwise use an empty list since
 	// we're moving away from the static database list approach
@@ -288,13 +288,13 @@ document.addEventListener('DOMContentLoaded', () => {
 	} else {
 		// In a real implementation, we would query the database server here
 		dashboardData.Databases = []string{}
-		
+
 		// For development/testing, add some placeholder databases
 		if len(dashboardData.Databases) == 0 {
 			dashboardData.Databases = []string{"db1", "db2", "db3"}
 		}
 	}
-	
+
 	dashboardData.BackupTypes = config.CFG.BackupTypes
 	dashboardData.LocalEnabled = config.CFG.Local.Enabled
 	dashboardData.S3Enabled = config.CFG.S3.Enabled

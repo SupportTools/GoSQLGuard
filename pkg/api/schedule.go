@@ -71,7 +71,7 @@ func (h *ScheduleHandler) getSchedules(w http.ResponseWriter, r *http.Request) {
 
 		// Convert to response type
 		response := convertScheduleToResponse(schedule)
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 		return
@@ -96,11 +96,11 @@ func (h *ScheduleHandler) getSchedules(w http.ResponseWriter, r *http.Request) {
 
 // scheduleRequest is the request structure for creating/updating a schedule
 type scheduleRequest struct {
-	ID             string     `json:"id,omitempty"`
-	Name           string     `json:"name"`
-	BackupType     string     `json:"backupType"`
-	CronExpression string     `json:"cronExpression"`
-	Enabled        bool       `json:"enabled"`
+	ID             string         `json:"id,omitempty"`
+	Name           string         `json:"name"`
+	BackupType     string         `json:"backupType"`
+	CronExpression string         `json:"cronExpression"`
+	Enabled        bool           `json:"enabled"`
 	LocalStorage   storageRequest `json:"localStorage"`
 	S3Storage      storageRequest `json:"s3Storage"`
 }
@@ -114,15 +114,15 @@ type storageRequest struct {
 
 // scheduleResponse is the response structure for schedule information
 type scheduleResponse struct {
-	ID             string           `json:"id"`
-	Name           string           `json:"name"`
-	BackupType     string           `json:"backupType"`
-	CronExpression string           `json:"cronExpression"`
-	Enabled        bool             `json:"enabled"`
-	LocalStorage   storageResponse  `json:"localStorage"`
-	S3Storage      storageResponse  `json:"s3Storage"`
-	CreatedAt      time.Time        `json:"createdAt"`
-	UpdatedAt      time.Time        `json:"updatedAt"`
+	ID             string          `json:"id"`
+	Name           string          `json:"name"`
+	BackupType     string          `json:"backupType"`
+	CronExpression string          `json:"cronExpression"`
+	Enabled        bool            `json:"enabled"`
+	LocalStorage   storageResponse `json:"localStorage"`
+	S3Storage      storageResponse `json:"s3Storage"`
+	CreatedAt      time.Time       `json:"createdAt"`
+	UpdatedAt      time.Time       `json:"updatedAt"`
 }
 
 // storageResponse defines storage response information
@@ -216,21 +216,21 @@ func (h *ScheduleHandler) createOrUpdateSchedule(w http.ResponseWriter, r *http.
 	// Add retention policies
 	if req.LocalStorage.Enabled {
 		schedule.RetentionPolicies = append(schedule.RetentionPolicies, dbmeta.ScheduleRetentionPolicy{
-			ScheduleID:   schedule.ID,
-			StorageType:  "local",
-			Duration:     req.LocalStorage.Duration,
-			KeepForever:  req.LocalStorage.KeepForever,
-			CreatedAt:    time.Now(),
+			ScheduleID:  schedule.ID,
+			StorageType: "local",
+			Duration:    req.LocalStorage.Duration,
+			KeepForever: req.LocalStorage.KeepForever,
+			CreatedAt:   time.Now(),
 		})
 	}
 
 	if req.S3Storage.Enabled {
 		schedule.RetentionPolicies = append(schedule.RetentionPolicies, dbmeta.ScheduleRetentionPolicy{
-			ScheduleID:   schedule.ID,
-			StorageType:  "s3",
-			Duration:     req.S3Storage.Duration,
-			KeepForever:  req.S3Storage.KeepForever,
-			CreatedAt:    time.Now(),
+			ScheduleID:  schedule.ID,
+			StorageType: "s3",
+			Duration:    req.S3Storage.Duration,
+			KeepForever: req.S3Storage.KeepForever,
+			CreatedAt:   time.Now(),
 		})
 	}
 
@@ -326,7 +326,7 @@ func (h *ScheduleHandler) reloadSchedulesFromDatabase() {
 
 	// Convert database schedules to config format
 	backupTypes := make(map[string]config.BackupTypeConfig)
-	
+
 	for _, schedule := range schedules {
 		if !schedule.Enabled {
 			continue // Skip disabled schedules

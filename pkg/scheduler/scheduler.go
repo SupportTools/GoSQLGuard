@@ -98,20 +98,20 @@ func (s *Scheduler) WaitForever() {
 // ReloadSchedules removes all existing jobs and re-creates them based on current configuration
 func (s *Scheduler) ReloadSchedules() error {
 	log.Println("Reloading backup schedules...")
-	
+
 	// Remove all existing backup jobs
 	for backupType, jobID := range s.jobIDs {
 		s.cronScheduler.Remove(jobID)
 		delete(s.jobIDs, backupType)
 		log.Printf("Removed schedule for %s backup", backupType)
 	}
-	
+
 	// Re-setup jobs with new configuration
 	err := s.SetupJobs()
 	if err != nil {
 		return fmt.Errorf("failed to reload schedules: %w", err)
 	}
-	
+
 	log.Println("Successfully reloaded backup schedules")
 	return nil
 }
@@ -128,8 +128,8 @@ func (s *Scheduler) RunOnce(backupType string, servers []string, databases []str
 	} else {
 		log.Printf("Running one-time backup for type: %s on all servers", backupType)
 	}
-	
-	return s.backupManager.PerformBackup(backupType, backup.BackupOptions{
+
+	return s.backupManager.PerformBackup(backupType, backup.Options{
 		Servers:   servers,
 		Databases: databases,
 	})
@@ -146,12 +146,12 @@ func (s *Scheduler) GetNextRunTime(backupType string) (time.Time, error) {
 	// Find the entry for the specified backup type
 	for _, entry := range s.cronScheduler.Entries() {
 		// We need to compare the function address, which is not directly possible
-		// So this is a simplification; in a real implementation, you might need 
+		// So this is a simplification; in a real implementation, you might need
 		// to track entry IDs or use another approach
-		
+
 		// For now, just return the next time for any backup
 		return entry.Next, nil
 	}
-	
+
 	return time.Time{}, fmt.Errorf("no scheduled job found for backup type: %s", backupType)
 }

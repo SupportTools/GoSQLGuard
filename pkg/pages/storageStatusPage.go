@@ -13,18 +13,18 @@ import (
 type StorageStatusPageData struct {
 	Stats        map[string]interface{}
 	LocalStorage struct {
-		Enabled    bool
-		Path       string
-		TotalSize  int64
+		Enabled     bool
+		Path        string
+		TotalSize   int64
 		BackupCount int
 	}
 	S3Storage struct {
-		Enabled    bool
-		Bucket     string
-		Region     string
-		Endpoint   string
-		Prefix     string
-		TotalSize  int64
+		Enabled     bool
+		Bucket      string
+		Region      string
+		Endpoint    string
+		Prefix      string
+		TotalSize   int64
 		BackupCount int
 	}
 	BackupTypes map[string]config.BackupTypeConfig
@@ -256,7 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	// Get data for the page
 	var data StorageStatusPageData
-	
+
 	// Initialize stats with defaults
 	data.Stats = make(map[string]interface{})
 	data.Stats["totalCount"] = 0
@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		"error":   0,
 		"deleted": 0,
 	}
-	
+
 	// Get statistics
 	if metadata.DefaultStore != nil {
 		stats := metadata.DefaultStore.GetStats()
@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			data.Stats = stats
 		}
 	}
-	
+
 	// Set up local storage info
 	data.LocalStorage.Enabled = config.CFG.Local.Enabled
 	data.LocalStorage.Path = config.CFG.Local.BackupDirectory
@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			data.LocalStorage.BackupCount = statusCounts["success"]
 		}
 	}
-	
+
 	// Set up S3 storage info
 	data.S3Storage.Enabled = config.CFG.S3.Enabled
 	data.S3Storage.Bucket = config.CFG.S3.Bucket
@@ -305,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 		data.S3Storage.BackupCount = s3Count
 	}
-	
+
 	// Set backup types info
 	data.BackupTypes = config.CFG.BackupTypes
 	data.LastUpdated = time.Now()

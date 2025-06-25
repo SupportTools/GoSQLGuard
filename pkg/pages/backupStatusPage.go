@@ -561,7 +561,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	var err error
 	tmpl, err = tmpl.Parse(contentTemplate)
 	if err != nil {
-		http.Error(w, "Template parsing error: " + err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Template parsing error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -577,23 +577,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	// Get data for the page
 	var data BackupStatusPageData
-	
+
 	// Initialize backups list
 	data.Backups = []types.BackupMeta{}
-	
+
 	// Get backups with applied filters
 	var filteredBackups []types.BackupMeta
-	
+
 	// Get the appropriate metadata store
 	metadataStore := metadata.GetActiveStore()
 	if metadataStore != nil {
 		// Get backups with basic filters (don't use activeOnly if we have a specific status filter)
 		useActiveOnly := filterActive && filterStatus == ""
 		filteredBackups = metadataStore.GetBackupsFiltered(filterServer, filterDB, filterType, useActiveOnly)
-		
+
 		// Apply additional filters
 		var finalBackups []types.BackupMeta
-		
+
 		// Parse date filters
 		var startDate, endDate time.Time
 		if filterStartDate != "" {
@@ -604,7 +604,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			// Add 23:59:59 to include the entire end date
 			endDate = endDate.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
 		}
-		
+
 		for _, backup := range filteredBackups {
 			// Apply status filter
 			if filterStatus != "" && filterStatus != "active" {
@@ -612,7 +612,7 @@ document.addEventListener('DOMContentLoaded', function() {
 					continue
 				}
 			}
-			
+
 			// Apply date range filter
 			if !startDate.IsZero() && backup.CreatedAt.Before(startDate) {
 				continue
@@ -620,23 +620,23 @@ document.addEventListener('DOMContentLoaded', function() {
 			if !endDate.IsZero() && backup.CreatedAt.After(endDate) {
 				continue
 			}
-			
+
 			// Apply search filter (case-insensitive)
 			if filterSearch != "" {
 				searchLower := strings.ToLower(filterSearch)
 				if !strings.Contains(strings.ToLower(backup.ID), searchLower) &&
-				   !strings.Contains(strings.ToLower(backup.Database), searchLower) &&
-				   !strings.Contains(strings.ToLower(backup.ServerName), searchLower) {
+					!strings.Contains(strings.ToLower(backup.Database), searchLower) &&
+					!strings.Contains(strings.ToLower(backup.ServerName), searchLower) {
 					continue
 				}
 			}
-			
+
 			finalBackups = append(finalBackups, backup)
 		}
-		
+
 		data.Backups = finalBackups
 	}
-	
+
 	// Set filter values for the form
 	data.FilterType = filterType
 	data.FilterDB = filterDB
@@ -646,7 +646,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	data.FilterStartDate = filterStartDate
 	data.FilterEndDate = filterEndDate
 	data.FilterSearch = filterSearch
-	
+
 	// Collect unique server names for the server dropdown
 	serverSet := make(map[string]bool)
 	for _, backup := range data.Backups {
@@ -654,18 +654,18 @@ document.addEventListener('DOMContentLoaded', function() {
 			serverSet[backup.ServerName] = true
 		}
 	}
-	
+
 	// Also add servers from configuration
 	for _, server := range config.CFG.DatabaseServers {
 		serverSet[server.Name] = true
 	}
-	
+
 	// Convert to slice
 	data.Servers = make([]string, 0, len(serverSet))
 	for server := range serverSet {
 		data.Servers = append(data.Servers, server)
 	}
-	
+
 	// Get database list for dropdown
 	if len(config.CFG.MySQL.IncludeDatabases) > 0 {
 		// If specific databases are included in the configuration, use those
@@ -681,12 +681,12 @@ document.addEventListener('DOMContentLoaded', function() {
 			data.Databases = databases
 		}
 	}
-	
+
 	data.BackupTypes = config.CFG.BackupTypes
 	data.LocalEnabled = config.CFG.Local.Enabled
 	data.S3Enabled = config.CFG.S3.Enabled
 	data.LastUpdated = time.Now()
-	
+
 	// Get recent errors (last 10 failed backups) - only if we're not already filtering by error status
 	if filterStatus != "error" && metadataStore != nil {
 		allBackups := metadataStore.GetBackupsFiltered("", "", "", false)

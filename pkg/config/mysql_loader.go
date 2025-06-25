@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql" // MySQL driver for database connections
 )
 
 // MySQLConfigLoader loads configuration from MySQL database
@@ -68,10 +68,10 @@ func (m *MySQLConfigLoader) LoadConfiguration() (*AppConfig, error) {
 	if err := m.loadGlobalConfig(config); err != nil {
 		return nil, fmt.Errorf("failed to load global config: %w", err)
 	}
-	
+
 	// Debug: Log metadata configuration
 	log.Printf("DEBUG: MetadataDB config after loading - Enabled: %v, Host: %s, Port: %d, Database: %s, Username: %s",
-		config.MetadataDB.Enabled, config.MetadataDB.Host, config.MetadataDB.Port, 
+		config.MetadataDB.Enabled, config.MetadataDB.Host, config.MetadataDB.Port,
 		config.MetadataDB.Database, config.MetadataDB.Username)
 
 	// Load database servers
@@ -483,7 +483,7 @@ func LoadConfigFromMySQL() (*AppConfig, error) {
 
 	// Set defaults
 	if opts.Host == "" {
-		opts.Host = "config-mysql"  // Default to sidecar container name
+		opts.Host = "config-mysql" // Default to sidecar container name
 	}
 	if opts.Port == "" {
 		opts.Port = "3306"

@@ -23,14 +23,14 @@ func GetAllDatabases() ([]string, error) {
 				break
 			}
 		}
-		
+
 		// If we found a MySQL server in the configuration
 		if mysqlServer != nil {
 			log.Printf("Using server %s for database list", mysqlServer.Name)
 			return GetDatabasesFromServer(*mysqlServer)
 		}
 	}
-	
+
 	// Fall back to legacy config if no database servers are configured
 	// or if no MySQL servers were found
 	if config.CFG.MySQL.Host != "" {
@@ -39,12 +39,12 @@ func GetAllDatabases() ([]string, error) {
 		port := config.CFG.MySQL.Port
 		username := config.CFG.MySQL.Username
 		password := config.CFG.MySQL.Password
-		
+
 		// Create connection string
 		connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/", username, password, host, port)
 		return connectAndListDatabases(connStr, config.CFG.MySQL.ExcludeDatabases)
 	}
-	
+
 	return []string{}, fmt.Errorf("no MySQL configuration found")
 }
 
@@ -53,17 +53,17 @@ func GetDatabasesFromServer(server config.DatabaseServerConfig) ([]string, error
 	if server.Type != "mysql" {
 		return nil, fmt.Errorf("server %s is not a MySQL server", server.Name)
 	}
-	
+
 	// Create connection string
-	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/", 
+	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/",
 		server.Username, server.Password, server.Host, server.Port)
-	
+
 	return connectAndListDatabases(connStr, server.ExcludeDatabases)
 }
 
 // connectAndListDatabases handles the common database connection and listing logic
 func connectAndListDatabases(connStr string, excludeList []string) ([]string, error) {
-	
+
 	// Create connection
 	db, err := sql.Open("mysql", connStr)
 	if err != nil {

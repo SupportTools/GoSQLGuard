@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/supporttools/GoSQLGuard/pkg/metadata"
 	dbmeta "github.com/supporttools/GoSQLGuard/pkg/database/metadata"
 )
 
@@ -15,7 +14,7 @@ import (
 func TestScheduleHandler_RequestValidation(t *testing.T) {
 	// Handler without repository (will return service unavailable)
 	handler := &ScheduleHandler{}
-	
+
 	tests := []struct {
 		name           string
 		method         string
@@ -31,9 +30,9 @@ func TestScheduleHandler_RequestValidation(t *testing.T) {
 			expectedStatus: http.StatusServiceUnavailable,
 		},
 		{
-			name:           "No repository - POST",
-			method:         "POST",
-			endpoint:       "/api/schedules",
+			name:     "No repository - POST",
+			method:   "POST",
+			endpoint: "/api/schedules",
 			body: scheduleRequest{
 				Name:           "Test",
 				BackupType:     "daily",
@@ -63,7 +62,7 @@ func TestScheduleHandler_RequestValidation(t *testing.T) {
 			expectedStatus: http.StatusMethodNotAllowed,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var req *http.Request
@@ -74,18 +73,18 @@ func TestScheduleHandler_RequestValidation(t *testing.T) {
 			} else {
 				req = httptest.NewRequest(tt.method, tt.endpoint, nil)
 			}
-			
+
 			rr := httptest.NewRecorder()
-			
+
 			// Route to appropriate handler
 			if tt.endpoint == "/api/schedules/delete" || tt.endpoint == "/api/schedules/delete?id=123" {
 				handler.handleDeleteSchedule(rr, req)
 			} else {
 				handler.handleSchedules(rr, req)
 			}
-			
+
 			if status := rr.Code; status != tt.expectedStatus {
-				t.Errorf("%s: handler returned wrong status code: got %v want %v", 
+				t.Errorf("%s: handler returned wrong status code: got %v want %v",
 					tt.name, status, tt.expectedStatus)
 			}
 		})
@@ -154,12 +153,12 @@ func TestScheduleRequest_Validation(t *testing.T) {
 			shouldError: false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Validate required fields
 			hasError := tt.req.Name == "" || tt.req.BackupType == "" || tt.req.CronExpression == ""
-			
+
 			if hasError != tt.shouldError {
 				t.Errorf("Expected error=%v, got error=%v", tt.shouldError, hasError)
 			}
@@ -189,30 +188,30 @@ func TestScheduleResponse_Structure(t *testing.T) {
 			},
 		},
 	}
-	
+
 	response := convertScheduleToResponse(&schedule)
-	
+
 	// Verify response structure
 	if response.ID != "test-id" {
 		t.Errorf("Expected ID='test-id', got %v", response.ID)
 	}
-	
+
 	if response.Name != "Test Schedule" {
 		t.Errorf("Expected Name='Test Schedule', got %v", response.Name)
 	}
-	
+
 	if !response.LocalStorage.Enabled {
 		t.Errorf("Expected LocalStorage to be enabled")
 	}
-	
+
 	if response.LocalStorage.Duration != "168h" {
 		t.Errorf("Expected LocalStorage.Duration='168h', got %v", response.LocalStorage.Duration)
 	}
-	
+
 	if !response.S3Storage.Enabled {
 		t.Errorf("Expected S3Storage to be enabled")
 	}
-	
+
 	if !response.S3Storage.KeepForever {
 		t.Errorf("Expected S3Storage.KeepForever=true")
 	}
@@ -221,14 +220,14 @@ func TestScheduleResponse_Structure(t *testing.T) {
 // TestScheduleHandler_JSONParsing tests JSON parsing and error handling
 func TestScheduleHandler_JSONParsing(t *testing.T) {
 	handler := &ScheduleHandler{}
-	
+
 	// Test invalid JSON
 	req := httptest.NewRequest("POST", "/api/schedules", bytes.NewBufferString("invalid json"))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	
+
 	handler.handleSchedules(rr, req)
-	
+
 	// Should return service unavailable (no repo) before trying to parse JSON
 	if status := rr.Code; status != http.StatusServiceUnavailable {
 		t.Errorf("Expected status %v for invalid JSON, got %v", http.StatusServiceUnavailable, status)

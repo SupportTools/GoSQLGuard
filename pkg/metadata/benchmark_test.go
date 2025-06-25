@@ -11,12 +11,12 @@ import (
 // BenchmarkGetBackups benchmarks retrieving all backups
 func BenchmarkGetBackups(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
-	
+
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("Size%d", size), func(b *testing.B) {
 			// Setup: Create test store with many backups
 			store := createBenchmarkStore(size)
-			
+
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				backups := store.GetBackups()
@@ -29,11 +29,11 @@ func BenchmarkGetBackups(b *testing.B) {
 // BenchmarkGetBackupsFiltered benchmarks filtered queries
 func BenchmarkGetBackupsFiltered(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
-	
+
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("Size%d", size), func(b *testing.B) {
 			store := createBenchmarkStore(size)
-			
+
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				backups := store.GetBackupsFiltered("server1", "testdb", "daily", true)
@@ -46,7 +46,7 @@ func BenchmarkGetBackupsFiltered(b *testing.B) {
 // BenchmarkGetBackupsPaginated benchmarks paginated queries
 func BenchmarkGetBackupsPaginated(b *testing.B) {
 	sizes := []int{1000, 10000, 100000}
-	
+
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("Size%d", size), func(b *testing.B) {
 			// This would test the paginated implementation
@@ -59,11 +59,11 @@ func BenchmarkGetBackupsPaginated(b *testing.B) {
 // BenchmarkGetStats benchmarks statistics calculation
 func BenchmarkGetStats(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
-	
+
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("Size%d", size), func(b *testing.B) {
 			store := createBenchmarkStore(size)
-			
+
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				stats := store.GetStats()
@@ -76,7 +76,7 @@ func BenchmarkGetStats(b *testing.B) {
 // BenchmarkUpdateBackupStatus benchmarks status updates
 func BenchmarkUpdateBackupStatus(b *testing.B) {
 	store := createBenchmarkStore(1000)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		id := fmt.Sprintf("server1-testdb-daily-%d", i%1000)
@@ -87,7 +87,7 @@ func BenchmarkUpdateBackupStatus(b *testing.B) {
 // BenchmarkConcurrentAccess benchmarks concurrent read/write operations
 func BenchmarkConcurrentAccess(b *testing.B) {
 	store := createBenchmarkStore(1000)
-	
+
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
@@ -109,20 +109,20 @@ func BenchmarkConcurrentAccess(b *testing.B) {
 func BenchmarkSearchPerformance(b *testing.B) {
 	sizes := []int{1000, 10000}
 	searchTerms := []string{"server", "testdb", "daily", "2024"}
-	
+
 	for _, size := range sizes {
 		for _, term := range searchTerms {
 			b.Run(fmt.Sprintf("Size%d_Search%s", size, term), func(b *testing.B) {
 				store := createBenchmarkStore(size)
 				backups := store.GetBackups()
-				
+
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					var results []types.BackupMeta
 					for _, backup := range backups {
-						if contains(backup.ID, term) || 
-						   contains(backup.ServerName, term) || 
-						   contains(backup.Database, term) {
+						if contains(backup.ID, term) ||
+							contains(backup.ServerName, term) ||
+							contains(backup.Database, term) {
 							results = append(results, backup)
 						}
 					}
@@ -137,21 +137,21 @@ func BenchmarkSearchPerformance(b *testing.B) {
 
 func createBenchmarkStore(size int) *Store {
 	store := &Store{
-		metadata: MetadataStore{
+		metadata: Data{
 			Backups:     make([]types.BackupMeta, 0, size),
 			LastUpdated: time.Now(),
 			Version:     "1.0",
 		},
 	}
-	
+
 	// Generate test data
 	servers := []string{"server1", "server2", "server3", "server4", "server5"}
 	databases := []string{"testdb", "proddb", "userdb", "orderdb", "logdb"}
 	backupTypes := []string{"hourly", "daily", "weekly", "monthly", "manual"}
 	statuses := []types.BackupStatus{StatusSuccess, StatusError, StatusPending}
-	
+
 	baseTime := time.Now().Add(-30 * 24 * time.Hour) // Start 30 days ago
-	
+
 	for i := 0; i < size; i++ {
 		backup := types.BackupMeta{
 			ID:          fmt.Sprintf("%s-%s-%s-%d", servers[i%5], databases[i%5], backupTypes[i%5], i),
@@ -165,14 +165,14 @@ func createBenchmarkStore(size int) *Store {
 			Status:      statuses[i%3],
 			LocalPaths:  map[string]string{"default": fmt.Sprintf("/backups/%d.sql.gz", i)},
 		}
-		
+
 		if i%2 == 0 {
 			backup.S3UploadStatus = StatusSuccess
 			backup.S3Keys = map[string]string{"default": fmt.Sprintf("backups/%d.sql.gz", i)}
 		}
-		
+
 		store.metadata.Backups = append(store.metadata.Backups, backup)
-		
+
 		// Update stats
 		if backup.Status == StatusSuccess {
 			store.metadata.TotalLocalSize += backup.Size
@@ -181,7 +181,7 @@ func createBenchmarkStore(size int) *Store {
 			store.metadata.TotalS3Size += backup.Size
 		}
 	}
-	
+
 	return store
 }
 
@@ -209,11 +209,11 @@ func contains(s, substr string) bool {
 
 func BenchmarkMemoryUsage(b *testing.B) {
 	sizes := []int{1000, 10000, 100000}
-	
+
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("Size%d", size), func(b *testing.B) {
 			b.ReportAllocs()
-			
+
 			for i := 0; i < b.N; i++ {
 				store := createBenchmarkStore(size)
 				_ = store
@@ -224,7 +224,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 
 // Results documentation:
 // These benchmarks help identify performance bottlenecks in the metadata system.
-// 
+//
 // Expected improvements with optimization:
 // 1. GetBackups: O(n) -> O(1) with pagination (constant page size)
 // 2. GetBackupsFiltered: O(n) full scan -> O(log n) with indexes

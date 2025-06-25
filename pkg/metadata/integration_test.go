@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package metadata
@@ -63,12 +64,12 @@ func testMetadataPersistence(t *testing.T) {
 
 	// Test 1: Create and persist backups
 	backup1 := DefaultStore.CreateBackupMeta("server1", "mysql", "testdb", "daily")
-	err = DefaultStore.UpdateBackupStatus(backup1.ID, types.StatusSuccess, 
+	err = DefaultStore.UpdateBackupStatus(backup1.ID, types.StatusSuccess,
 		map[string]string{"local": "/backup/path1"}, 1024*1024, "")
 	assert.NoError(t, err)
 
 	backup2 := DefaultStore.CreateBackupMeta("server2", "mysql", "proddb", "hourly")
-	err = DefaultStore.UpdateBackupStatus(backup2.ID, types.StatusError, 
+	err = DefaultStore.UpdateBackupStatus(backup2.ID, types.StatusError,
 		nil, 0, "Connection timeout")
 	assert.NoError(t, err)
 
@@ -146,13 +147,13 @@ func TestMetadataCorruptionRecovery(t *testing.T) {
 	// Add backups
 	for i := 0; i < 5; i++ {
 		backup := DefaultStore.CreateBackupMeta("server", "mysql", "db", "daily")
-		DefaultStore.UpdateBackupStatus(backup.ID, types.StatusSuccess, 
+		DefaultStore.UpdateBackupStatus(backup.ID, types.StatusSuccess,
 			map[string]string{"local": "/backup"}, 1024, "")
 	}
 
 	// Get the metadata file path
 	metadataPath := filepath.Join(tmpDir, "metadata.json")
-	
+
 	// Read good data
 	goodData, err := ioutil.ReadFile(metadataPath)
 	require.NoError(t, err)

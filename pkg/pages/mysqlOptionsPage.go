@@ -358,31 +358,31 @@ function showAlert(type, message) {
 
 	// Get data for the page
 	var data MySQLOptionsPageData
-	
+
 	// Get global options (for now, use defaults as config isn't properly integrated)
 	data.GlobalOptions = database.MySQLDumpOptions{
 		SingleTransaction: true,
-		Quick:            true,
-		Triggers:         true,
-		Routines:         true,
-		Events:           true,
-		ExtendedInsert:   true,
+		Quick:             true,
+		Triggers:          true,
+		Routines:          true,
+		Events:            true,
+		ExtendedInsert:    true,
 	}
-	
+
 	// Initialize maps for backup types and servers
 	data.BackupTypeOptions = make(map[string]database.MySQLDumpOptions)
 	data.ServerOptions = make(map[string]database.MySQLDumpOptions)
-	
+
 	// Add backup types
 	for typeName := range config.CFG.BackupTypes {
 		data.BackupTypeOptions[typeName] = database.MySQLDumpOptions{}
 	}
-	
+
 	// Add servers
 	for _, server := range config.CFG.DatabaseServers {
 		data.ServerOptions[server.Name] = database.MySQLDumpOptions{}
 	}
-	
+
 	data.LastUpdated = time.Now()
 
 	// Render the template

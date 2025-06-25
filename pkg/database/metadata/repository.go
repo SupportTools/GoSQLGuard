@@ -134,11 +134,11 @@ func (r *Repository) GetAllBackups(preload bool) ([]Backup, error) {
 
 	var backups []Backup
 	query := r.db
-	
+
 	if preload {
 		query = query.Preload("LocalPaths").Preload("S3Keys")
 	}
-	
+
 	err := query.Find(&backups).Error
 	if err != nil {
 		return nil, err
@@ -153,23 +153,23 @@ func (r *Repository) GetBackupsFiltered(serverName, database, backupType, status
 	defer r.mutex.RUnlock()
 
 	query := r.db.Preload("LocalPaths").Preload("S3Keys")
-	
+
 	if serverName != "" {
 		query = query.Where("server_name = ?", serverName)
 	}
-	
+
 	if database != "" {
 		query = query.Where("database_name = ?", database)
 	}
-	
+
 	if backupType != "" {
 		query = query.Where("backup_type = ?", backupType)
 	}
-	
+
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
-	
+
 	var backups []Backup
 	err := query.Find(&backups).Error
 	if err != nil {
@@ -196,12 +196,12 @@ func (r *Repository) UpdateLogFilePath(id, logFilePath string) error {
 }
 
 // GetBackupStats calculates statistics about backups
-func (r *Repository) GetBackupStats() (*MetadataStats, map[string]interface{}, error) {
+func (r *Repository) GetBackupStats() (*Stats, map[string]interface{}, error) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
 	// Get the global stats record
-	var stats MetadataStats
+	var stats Stats
 	if err := r.db.First(&stats, 1).Error; err != nil {
 		return nil, nil, err
 	}
@@ -255,12 +255,12 @@ func (r *Repository) GetBackupStats() (*MetadataStats, map[string]interface{}, e
 
 	// Build the detailed stats map
 	detailedStats := map[string]interface{}{
-		"totalCount":     len(statusCounts),
-		"totalLocalSize": stats.TotalLocalSize,
-		"totalS3Size":    stats.TotalS3Size,
-		"statusCounts":   make(map[string]int),
-		"typeDistribution": make(map[string]int),
-		"serverDistribution": make(map[string]int),
+		"totalCount":           len(statusCounts),
+		"totalLocalSize":       stats.TotalLocalSize,
+		"totalS3Size":          stats.TotalS3Size,
+		"statusCounts":         make(map[string]int),
+		"typeDistribution":     make(map[string]int),
+		"serverDistribution":   make(map[string]int),
 		"databaseDistribution": make(map[string]int),
 	}
 
@@ -292,20 +292,20 @@ func (r *Repository) GetBackupStats() (*MetadataStats, map[string]interface{}, e
 	return &stats, detailedStats, nil
 }
 
-// UpdateMetadataStats updates the metadata stats record
-func (r *Repository) UpdateMetadataStats(totalLocalSize, totalS3Size int64) error {
+// UpdateStats updates the metadata stats record
+func (r *Repository) UpdateStats(totalLocalSize, totalS3Size int64) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	return r.db.Model(&MetadataStats{}).Where("id = ?", 1).Updates(map[string]interface{}{
+	return r.db.Model(&Stats{}).Where("id = ?", 1).Updates(map[string]interface{}{
 		"total_local_size": totalLocalSize,
 		"total_s3_size":    totalS3Size,
 		"last_updated":     time.Now(),
 	}).Error
 }
 
-// RecalculateMetadataStats recalculates and updates the metadata stats
-func (r *Repository) RecalculateMetadataStats() error {
+// RecalculateStats recalculates and updates the metadata stats
+func (r *Repository) RecalculateStats() error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -331,7 +331,7 @@ func (r *Repository) RecalculateMetadataStats() error {
 		}
 
 		// Update stats
-		return tx.Model(&MetadataStats{}).Where("id = ?", 1).Updates(map[string]interface{}{
+		return tx.Model(&Stats{}).Where("id = ?", 1).Updates(map[string]interface{}{
 			"total_local_size": totalLocalSize,
 			"total_s3_size":    totalS3Size,
 			"last_updated":     time.Now(),
@@ -345,7 +345,7 @@ func (r *Repository) PurgeDeletedBackups(olderThan time.Duration) (int64, error)
 	defer r.mutex.Unlock()
 
 	threshold := time.Now().Add(-olderThan)
-	
+
 	// Count records that will be deleted
 	var count int64
 	if err := r.db.Model(&Backup{}).
@@ -353,14 +353,14 @@ func (r *Repository) PurgeDeletedBackups(olderThan time.Duration) (int64, error)
 		Count(&count).Error; err != nil {
 		return 0, err
 	}
-	
+
 	// Delete the records if any exist
 	if count > 0 {
 		// Using unscoped delete to remove the related records via cascading deletes
 		result := r.db.Unscoped().
 			Where("status = ? AND completed_at < ?", "deleted", threshold).
 			Delete(&Backup{})
-		
+
 		if result.Error != nil {
 			return 0, result.Error
 		}

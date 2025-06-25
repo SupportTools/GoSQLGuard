@@ -68,16 +68,16 @@ type PostgreSQLDumpOptionsConfig struct {
 
 // DatabaseServerConfig defines configuration for a single database server
 type DatabaseServerConfig struct {
-	Name             string                 `yaml:"name"`
-	Type             string                 `yaml:"type"` // mysql or postgresql
-	Host             string                 `yaml:"host"`
-	Port             string                 `yaml:"port"`
-	Username         string                 `yaml:"username"`
-	Password         string                 `yaml:"password"`
-	AuthPlugin       string                 `yaml:"authPlugin,omitempty"` // MySQL authentication plugin (mysql_native_password, caching_sha2_password)
-	IncludeDatabases []string               `yaml:"includeDatabases"`
-	ExcludeDatabases []string               `yaml:"excludeDatabases"`
-	MySQLDumpOptions MySQLDumpOptionsConfig `yaml:"mysqlDumpOptions,omitempty"`
+	Name                  string                      `yaml:"name"`
+	Type                  string                      `yaml:"type"` // mysql or postgresql
+	Host                  string                      `yaml:"host"`
+	Port                  string                      `yaml:"port"`
+	Username              string                      `yaml:"username"`
+	Password              string                      `yaml:"password"`
+	AuthPlugin            string                      `yaml:"authPlugin,omitempty"` // MySQL authentication plugin (mysql_native_password, caching_sha2_password)
+	IncludeDatabases      []string                    `yaml:"includeDatabases"`
+	ExcludeDatabases      []string                    `yaml:"excludeDatabases"`
+	MySQLDumpOptions      MySQLDumpOptionsConfig      `yaml:"mysqlDumpOptions,omitempty"`
 	PostgreSQLDumpOptions PostgreSQLDumpOptionsConfig `yaml:"postgresqlDumpOptions,omitempty"`
 }
 
@@ -158,15 +158,15 @@ type AppConfig struct {
 	// Multi-server configuration
 	DatabaseServers []DatabaseServerConfig `yaml:"database_servers"`
 
-	Local            LocalConfig                 `yaml:"local"`
-	S3               S3Config                    `yaml:"s3"`
-	Metrics          MetricsConfig               `yaml:"metrics"`
-	MetadataDB       MetadataDBConfig            `yaml:"metadata_database"`
-	BackupTypes      map[string]BackupTypeConfig `yaml:"backupTypes"`
-	MySQLDumpOptions MySQLDumpOptionsConfig      `yaml:"mysqlDumpOptions,omitempty"` // Default MySQL dump options
+	Local                 LocalConfig                 `yaml:"local"`
+	S3                    S3Config                    `yaml:"s3"`
+	Metrics               MetricsConfig               `yaml:"metrics"`
+	MetadataDB            MetadataDBConfig            `yaml:"metadata_database"`
+	BackupTypes           map[string]BackupTypeConfig `yaml:"backupTypes"`
+	MySQLDumpOptions      MySQLDumpOptionsConfig      `yaml:"mysqlDumpOptions,omitempty"`      // Default MySQL dump options
 	PostgreSQLDumpOptions PostgreSQLDumpOptionsConfig `yaml:"postgresqlDumpOptions,omitempty"` // Default PostgreSQL dump options
-	Debug            bool                        `yaml:"debug"`
-	ConfigFile       string                      `json:"configFile,omitempty"`
+	Debug                 bool                        `yaml:"debug"`
+	ConfigFile            string                      `json:"configFile,omitempty"`
 }
 
 // CFG is the global configuration object
@@ -177,7 +177,6 @@ func LoadConfiguration() {
 	log.Println("Loading configuration from environment variables...")
 	loadFromEnvironment()
 }
-
 
 // loadFromEnvironment loads configuration from environment variables
 func loadFromEnvironment() {
@@ -212,19 +211,19 @@ func loadFromEnvironment() {
 	CFG.MetadataDB.Username = getEnvOrDefault("METADATA_DB_USERNAME", "gosqlguard")
 	CFG.MetadataDB.Password = getEnvOrDefault("METADATA_DB_PASSWORD", "")
 	CFG.MetadataDB.Database = getEnvOrDefault("METADATA_DB_DATABASE", "gosqlguard_metadata")
-	
+
 	if maxOpen, err := strconv.Atoi(getEnvOrDefault("METADATA_DB_MAX_OPEN_CONNS", "10")); err == nil {
 		CFG.MetadataDB.MaxOpenConns = maxOpen
 	} else {
 		CFG.MetadataDB.MaxOpenConns = 10
 	}
-	
+
 	if maxIdle, err := strconv.Atoi(getEnvOrDefault("METADATA_DB_MAX_IDLE_CONNS", "5")); err == nil {
 		CFG.MetadataDB.MaxIdleConns = maxIdle
 	} else {
 		CFG.MetadataDB.MaxIdleConns = 5
 	}
-	
+
 	CFG.MetadataDB.ConnMaxLifetime = getEnvOrDefault("METADATA_DB_CONN_MAX_LIFETIME", "5m")
 	CFG.MetadataDB.AutoMigrate = parseEnvBool("METADATA_DB_AUTO_MIGRATE", true)
 
@@ -264,7 +263,7 @@ func setDefaults() {
 	if CFG.S3.OrganizationStrategy == "" {
 		CFG.S3.OrganizationStrategy = "combined" // Default to combined organization
 	}
-	
+
 	// Set defaults for metadata database if enabled
 	if CFG.MetadataDB.Enabled {
 		if CFG.MetadataDB.Host == "" {
@@ -530,7 +529,7 @@ func DisplayConfiguration() {
 	}
 
 	log.Println("============================================")
-	
+
 	// Metadata DB settings if enabled
 	if CFG.MetadataDB.Enabled {
 		log.Println("\n----- Metadata Database Configuration -----")
@@ -636,7 +635,7 @@ func ValidateConfig() error {
 		if CFG.MetadataDB.Database == "" {
 			return fmt.Errorf("metadata database name is required when enabled")
 		}
-		
+
 		// Validate connection max lifetime is a valid duration
 		if CFG.MetadataDB.ConnMaxLifetime != "" {
 			if _, err := time.ParseDuration(CFG.MetadataDB.ConnMaxLifetime); err != nil {

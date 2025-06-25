@@ -107,7 +107,7 @@ func getS3Client() (*s3.Client, error) {
 			log.Println("S3 Debug: Environment variables:")
 			log.Printf("  AWS_REGION=%s", config.CFG.S3.Region)
 			log.Printf("  AWS_ENDPOINT_URL=%s", config.CFG.S3.Endpoint)
-			log.Printf("  AWS_S3_FORCE_PATH_STYLE=%s", config.CFG.S3.PathStyle)
+			log.Printf("  AWS_S3_FORCE_PATH_STYLE=%v", config.CFG.S3.PathStyle)
 		}
 
 		// Configure custom endpoint with path-style addressing for S3-compatible storage
@@ -143,7 +143,7 @@ func getS3Client() (*s3.Client, error) {
 			log.Printf("S3 Debug: Error resolving endpoint: %s", errMsg)
 
 			// Return an error for other services
-			return aws.Endpoint{}, fmt.Errorf(errMsg)
+			return aws.Endpoint{}, fmt.Errorf("%s", errMsg)
 		})
 
 		// Add endpoint resolver to options
@@ -181,7 +181,7 @@ func (c *Client) UploadBackupWithKey(backupPath, objectKey string) error {
 	// or: prefix/by-type/daily/servername_db-timestamp.sql.gz
 	parts := strings.Split(objectKey, "/")
 	var backupType, database string
-	
+
 	// Try to get the backup type - usually 3rd or 4th part depending on prefix
 	if len(parts) >= 3 {
 		// Handle by-server or by-type formats
@@ -191,7 +191,7 @@ func (c *Client) UploadBackupWithKey(backupPath, objectKey string) error {
 			backupType = parts[len(parts)-1]
 		}
 	}
-	
+
 	// Try to extract database name from filename
 	if len(parts) > 0 {
 		filename := parts[len(parts)-1]

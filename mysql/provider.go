@@ -7,14 +7,17 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Provider handles MySQL database operations
 type Provider struct {
 	db *sql.DB
 }
 
+// NewProvider creates a new MySQL provider instance
 func NewProvider(db *sql.DB) *Provider {
 	return &Provider{db: db}
 }
 
+// GetDatabases retrieves a list of all databases from the MySQL server
 func (p *Provider) GetDatabases(ctx context.Context) ([]string, error) {
 	rows, err := p.db.QueryContext(ctx, "SHOW DATABASES")
 	if err != nil {

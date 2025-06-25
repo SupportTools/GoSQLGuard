@@ -11,23 +11,27 @@ import (
 	"github.com/supporttools/GoSQLGuard/pkg/metadata"
 )
 
+// PostgreSQLOptionsHandler handles PostgreSQL-specific database options API endpoints
 type PostgreSQLOptionsHandler struct {
 	Config *config.AppConfig
 	Logger *logrus.Logger
 }
 
+// PostgreSQLOptionsRequest represents a request for PostgreSQL database options
 type PostgreSQLOptionsRequest struct {
 	Global    *database.PostgreSQLDumpOptions            `json:"global,omitempty"`
 	PerServer map[string]*database.PostgreSQLDumpOptions `json:"per_server,omitempty"`
 }
 
+// PostgreSQLOptionsResponse represents the response containing PostgreSQL database options
 type PostgreSQLOptionsResponse struct {
-	Success bool                                          `json:"success"`
-	Message string                                        `json:"message"`
-	Global  *config.PostgreSQLDumpOptionsConfig           `json:"global,omitempty"`
+	Success   bool                                           `json:"success"`
+	Message   string                                         `json:"message"`
+	Global    *config.PostgreSQLDumpOptionsConfig            `json:"global,omitempty"`
 	PerServer map[string]*config.PostgreSQLDumpOptionsConfig `json:"per_server,omitempty"`
 }
 
+// NewPostgreSQLOptionsHandler creates a new handler for PostgreSQL options endpoints
 func NewPostgreSQLOptionsHandler(cfg *config.AppConfig, logger *logrus.Logger) *PostgreSQLOptionsHandler {
 	return &PostgreSQLOptionsHandler{
 		Config: cfg,
@@ -35,6 +39,7 @@ func NewPostgreSQLOptionsHandler(cfg *config.AppConfig, logger *logrus.Logger) *
 	}
 }
 
+// RegisterRoutes registers the PostgreSQL options API routes
 func (h *PostgreSQLOptionsHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/postgresql-options", h.handlePostgreSQLOptions)
 	mux.HandleFunc("/api/postgresql-options/server", h.handleServerPostgreSQLOptions)
@@ -53,8 +58,8 @@ func (h *PostgreSQLOptionsHandler) handlePostgreSQLOptions(w http.ResponseWriter
 
 func (h *PostgreSQLOptionsHandler) getPostgreSQLOptions(w http.ResponseWriter, r *http.Request) {
 	response := PostgreSQLOptionsResponse{
-		Success: true,
-		Global:  &h.Config.PostgreSQLDumpOptions,
+		Success:   true,
+		Global:    &h.Config.PostgreSQLDumpOptions,
 		PerServer: make(map[string]*config.PostgreSQLDumpOptionsConfig),
 	}
 
@@ -102,12 +107,12 @@ func (h *PostgreSQLOptionsHandler) updatePostgreSQLOptions(w http.ResponseWriter
 	}
 
 	response := PostgreSQLOptionsResponse{
-		Success: true,
-		Message: "PostgreSQL options updated successfully",
-		Global:  &h.Config.PostgreSQLDumpOptions,
+		Success:   true,
+		Message:   "PostgreSQL options updated successfully",
+		Global:    &h.Config.PostgreSQLDumpOptions,
 		PerServer: make(map[string]*config.PostgreSQLDumpOptionsConfig),
 	}
-	
+
 	if req.PerServer != nil {
 		for serverName, options := range req.PerServer {
 			configOptions := convertToConfigPostgreSQLOptions(options)

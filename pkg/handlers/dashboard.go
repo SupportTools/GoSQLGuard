@@ -54,7 +54,7 @@ func DashboardHandler(w http.ResponseWriter, r *http.Request) {
 // RecentBackupsHandler returns recent backups as HTML fragment for HTMX
 func RecentBackupsHandler(w http.ResponseWriter, r *http.Request) {
 	dashboardData := getDashboardData()
-	
+
 	// Render just the recent backups table
 	component := pages.RenderRecentBackups(dashboardData.RecentBackups)
 	component.Render(context.Background(), w)

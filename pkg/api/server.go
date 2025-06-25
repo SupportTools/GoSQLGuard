@@ -12,7 +12,7 @@ import (
 	"github.com/supporttools/GoSQLGuard/pkg/config"
 	dbmeta "github.com/supporttools/GoSQLGuard/pkg/database/metadata"
 	"github.com/supporttools/GoSQLGuard/pkg/metadata"
-	
+
 	// Database drivers
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
@@ -73,7 +73,7 @@ func (h *ServerHandler) getServers(w http.ResponseWriter, r *http.Request) {
 
 		// Convert to response type
 		response := convertServerToResponse(server)
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 		return
@@ -98,31 +98,31 @@ func (h *ServerHandler) getServers(w http.ResponseWriter, r *http.Request) {
 
 // serverRequest is the request structure for creating/updating a server
 type serverRequest struct {
-	ID              string   `json:"id,omitempty"`
-	Name            string   `json:"name"`
-	Type            string   `json:"type"`
-	Host            string   `json:"host"`
-	Port            string   `json:"port"`
-	Username        string   `json:"username"`
-	Password        string   `json:"password"`
-	AuthPlugin      string   `json:"authPlugin,omitempty"`
+	ID               string   `json:"id,omitempty"`
+	Name             string   `json:"name"`
+	Type             string   `json:"type"`
+	Host             string   `json:"host"`
+	Port             string   `json:"port"`
+	Username         string   `json:"username"`
+	Password         string   `json:"password"`
+	AuthPlugin       string   `json:"authPlugin,omitempty"`
 	IncludeDatabases []string `json:"includeDatabases,omitempty"`
 	ExcludeDatabases []string `json:"excludeDatabases,omitempty"`
 }
 
 // serverResponse is the response structure for server information
 type serverResponse struct {
-	ID              string   `json:"id"`
-	Name            string   `json:"name"`
-	Type            string   `json:"type"`
-	Host            string   `json:"host"`
-	Port            string   `json:"port"`
-	Username        string   `json:"username"`
-	AuthPlugin      string   `json:"authPlugin,omitempty"`
-	IncludeDatabases []string `json:"includeDatabases,omitempty"`
-	ExcludeDatabases []string `json:"excludeDatabases,omitempty"`
-	CreatedAt       time.Time `json:"createdAt"`
-	UpdatedAt       time.Time `json:"updatedAt"`
+	ID               string    `json:"id"`
+	Name             string    `json:"name"`
+	Type             string    `json:"type"`
+	Host             string    `json:"host"`
+	Port             string    `json:"port"`
+	Username         string    `json:"username"`
+	AuthPlugin       string    `json:"authPlugin,omitempty"`
+	IncludeDatabases []string  `json:"includeDatabases,omitempty"`
+	ExcludeDatabases []string  `json:"excludeDatabases,omitempty"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 // convertServerToResponse converts a ServerConfig to a serverResponse
@@ -180,7 +180,7 @@ func (h *ServerHandler) createOrUpdateServer(w http.ResponseWriter, r *http.Requ
 	// Handle update vs create
 	isUpdate := false
 	var existing *dbmeta.ServerConfig
-	
+
 	// First check if we have an ID (explicit update)
 	if req.ID != "" {
 		// This is an update by ID
@@ -199,7 +199,7 @@ func (h *ServerHandler) createOrUpdateServer(w http.ResponseWriter, r *http.Requ
 			http.Error(w, "Failed to check existing servers: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		
+
 		for _, s := range servers {
 			if s.Name == req.Name {
 				existing = &s
@@ -208,14 +208,14 @@ func (h *ServerHandler) createOrUpdateServer(w http.ResponseWriter, r *http.Requ
 				break
 			}
 		}
-		
+
 		// If not found, this is a new server
 		if !isUpdate {
 			server.ID = uuid.New().String()
 			server.CreatedAt = time.Now()
 		}
 	}
-	
+
 	// If updating, preserve creation time
 	if isUpdate && existing != nil {
 		server.CreatedAt = existing.CreatedAt
@@ -335,10 +335,10 @@ func (h *ServerHandler) handleTestConnection(w http.ResponseWriter, r *http.Requ
 
 	if req.Type == "mysql" {
 		// Test MySQL connection
-		testErr, databases = testMySQLConnection(req)
+		databases, testErr = testMySQLConnection(req)
 	} else if req.Type == "postgresql" {
 		// Test PostgreSQL connection
-		testErr, databases = testPostgreSQLConnection(req)
+		databases, testErr = testPostgreSQLConnection(req)
 	} else {
 		http.Error(w, "Unsupported database type: "+req.Type, http.StatusBadRequest)
 		return
@@ -412,8 +412,8 @@ func reloadConfigurationFromDatabase() {
 	log.Printf("Successfully loaded %d server configurations from the database", len(servers))
 }
 
-// testMySQLConnection tests a MySQL connection and returns any error and list of databases
-func testMySQLConnection(req serverRequest) (error, []string) {
+// testMySQLConnection tests a MySQL connection and returns list of databases and any error
+func testMySQLConnection(req serverRequest) ([]string, error) {
 	// Set default port if not provided
 	port := req.Port
 	if port == "" {
@@ -422,7 +422,7 @@ func testMySQLConnection(req serverRequest) (error, []string) {
 
 	// Build connection string
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/", req.Username, req.Password, req.Host, port)
-	
+
 	// Add auth plugin if specified
 	if req.AuthPlugin != "" {
 		dsn += fmt.Sprintf("?auth=%s", req.AuthPlugin)
@@ -431,20 +431,20 @@ func testMySQLConnection(req serverRequest) (error, []string) {
 	// Open connection
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return fmt.Errorf("failed to create connection: %w", err), nil
+		return nil, fmt.Errorf("failed to create connection: %w", err)
 	}
 	defer db.Close()
 
 	// Test connection
 	err = db.Ping()
 	if err != nil {
-		return fmt.Errorf("failed to ping database: %w", err), nil
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	// Get list of databases
 	rows, err := db.Query("SHOW DATABASES")
 	if err != nil {
-		return fmt.Errorf("failed to list databases: %w", err), nil
+		return nil, fmt.Errorf("failed to list databases: %w", err)
 	}
 	defer rows.Close()
 
@@ -460,11 +460,11 @@ func testMySQLConnection(req serverRequest) (error, []string) {
 		}
 	}
 
-	return nil, databases
+	return databases, nil
 }
 
-// testPostgreSQLConnection tests a PostgreSQL connection and returns any error and list of databases
-func testPostgreSQLConnection(req serverRequest) (error, []string) {
+// testPostgreSQLConnection tests a PostgreSQL connection and returns list of databases and any error
+func testPostgreSQLConnection(req serverRequest) ([]string, error) {
 	// Set default port if not provided
 	port := req.Port
 	if port == "" {
@@ -472,20 +472,20 @@ func testPostgreSQLConnection(req serverRequest) (error, []string) {
 	}
 
 	// Build connection string
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s sslmode=disable", 
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s sslmode=disable",
 		req.Host, port, req.Username, req.Password)
 
 	// Open connection
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		return fmt.Errorf("failed to create connection: %w", err), nil
+		return nil, fmt.Errorf("failed to create connection: %w", err)
 	}
 	defer db.Close()
 
 	// Test connection
 	err = db.Ping()
 	if err != nil {
-		return fmt.Errorf("failed to ping database: %w", err), nil
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	// Get list of databases
@@ -493,10 +493,10 @@ func testPostgreSQLConnection(req serverRequest) (error, []string) {
 		WHERE datistemplate = false 
 		AND datname != 'postgres'
 		ORDER BY datname`
-	
+
 	rows, err := db.Query(query)
 	if err != nil {
-		return fmt.Errorf("failed to list databases: %w", err), nil
+		return nil, fmt.Errorf("failed to list databases: %w", err)
 	}
 	defer rows.Close()
 
@@ -509,5 +509,5 @@ func testPostgreSQLConnection(req serverRequest) (error, []string) {
 		databases = append(databases, dbName)
 	}
 
-	return nil, databases
+	return databases, nil
 }

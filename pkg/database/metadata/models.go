@@ -7,16 +7,16 @@ import (
 
 // ServerConfig represents a database server configuration
 type ServerConfig struct {
-	ID              string    `gorm:"primaryKey;type:varchar(255)"`
-	Name            string    `gorm:"type:varchar(255);not null;uniqueIndex"`
-	Type            string    `gorm:"type:varchar(50);not null"` // mysql or postgresql
-	Host            string    `gorm:"type:varchar(255);not null"`
-	Port            string    `gorm:"type:varchar(10);not null"`
-	Username        string    `gorm:"type:varchar(255);not null"`
-	Password        string    `gorm:"type:varchar(255);not null"`
-	AuthPlugin      string    `gorm:"type:varchar(100)"`
-	CreatedAt       time.Time `gorm:"not null"`
-	UpdatedAt       time.Time `gorm:"not null"`
+	ID         string    `gorm:"primaryKey;type:varchar(255)"`
+	Name       string    `gorm:"type:varchar(255);not null;uniqueIndex"`
+	Type       string    `gorm:"type:varchar(50);not null"` // mysql or postgresql
+	Host       string    `gorm:"type:varchar(255);not null"`
+	Port       string    `gorm:"type:varchar(10);not null"`
+	Username   string    `gorm:"type:varchar(255);not null"`
+	Password   string    `gorm:"type:varchar(255);not null"`
+	AuthPlugin string    `gorm:"type:varchar(100)"`
+	CreatedAt  time.Time `gorm:"not null"`
+	UpdatedAt  time.Time `gorm:"not null"`
 
 	// Relationships
 	DatabaseFilters []ServerDatabaseFilter `gorm:"foreignKey:ServerID;constraint:OnDelete:CASCADE"`
@@ -44,11 +44,11 @@ func (ServerDatabaseFilter) TableName() string {
 
 // ServerMySQLOption represents MySQL-specific options for a server
 type ServerMySQLOption struct {
-	ID         uint      `gorm:"primaryKey;autoIncrement"`
-	ServerID   string    `gorm:"type:varchar(255);not null;index"`
-	OptionName string    `gorm:"type:varchar(100);not null"`
-	OptionValue string   `gorm:"type:varchar(255)"`
-	CreatedAt  time.Time `gorm:"not null"`
+	ID          uint      `gorm:"primaryKey;autoIncrement"`
+	ServerID    string    `gorm:"type:varchar(255);not null;index"`
+	OptionName  string    `gorm:"type:varchar(100);not null"`
+	OptionValue string    `gorm:"type:varchar(255)"`
+	CreatedAt   time.Time `gorm:"not null"`
 }
 
 // TableName specifies the table name for the ServerMySQLOption model
@@ -92,21 +92,21 @@ func (ScheduleRetentionPolicy) TableName() string {
 
 // Backup represents a database backup record
 type Backup struct {
-	ID              string    `gorm:"primaryKey;type:varchar(255)"`
-	ServerName      string    `gorm:"type:varchar(255);not null;index"`
-	ServerType      string    `gorm:"type:varchar(50);not null"`
-	DatabaseName    string    `gorm:"column:database_name;type:varchar(255);not null;index"`
-	BackupType      string    `gorm:"type:varchar(50);not null;index"`
-	CreatedAt       time.Time `gorm:"not null"`
-	CompletedAt     *time.Time
-	Size            int64
-	Status          string    `gorm:"type:varchar(50);not null;index"`
-	ErrorMessage    string    `gorm:"type:text"`
-	RetentionPolicy string    `gorm:"type:varchar(255)"`
-	ExpiresAt       *time.Time
-	LogFilePath     string    `gorm:"type:varchar(1024)"`
-	S3UploadStatus  string    `gorm:"type:varchar(50)"`
-	S3UploadError   string    `gorm:"type:text"`
+	ID               string    `gorm:"primaryKey;type:varchar(255)"`
+	ServerName       string    `gorm:"type:varchar(255);not null;index"`
+	ServerType       string    `gorm:"type:varchar(50);not null"`
+	DatabaseName     string    `gorm:"column:database_name;type:varchar(255);not null;index"`
+	BackupType       string    `gorm:"type:varchar(50);not null;index"`
+	CreatedAt        time.Time `gorm:"not null"`
+	CompletedAt      *time.Time
+	Size             int64
+	Status           string `gorm:"type:varchar(50);not null;index"`
+	ErrorMessage     string `gorm:"type:text"`
+	RetentionPolicy  string `gorm:"type:varchar(255)"`
+	ExpiresAt        *time.Time
+	LogFilePath      string `gorm:"type:varchar(1024)"`
+	S3UploadStatus   string `gorm:"type:varchar(50)"`
+	S3UploadError    string `gorm:"type:text"`
 	S3UploadComplete *time.Time
 
 	// Relationships
@@ -143,8 +143,8 @@ func (S3Key) TableName() string {
 	return "s3_keys"
 }
 
-// MetadataStats represents global metadata statistics
-type MetadataStats struct {
+// Stats represents global metadata statistics
+type Stats struct {
 	ID             uint      `gorm:"primaryKey;autoIncrement:false;default:1"`
 	TotalLocalSize int64     `gorm:"not null;default:0"`
 	TotalS3Size    int64     `gorm:"not null;default:0"`
@@ -152,7 +152,7 @@ type MetadataStats struct {
 	Version        string    `gorm:"type:varchar(50);not null"`
 }
 
-// TableName specifies the table name for the MetadataStats model
-func (MetadataStats) TableName() string {
+// TableName specifies the table name for the Stats model
+func (Stats) TableName() string {
 	return "metadata_stats"
 }

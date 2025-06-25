@@ -47,7 +47,7 @@ func TestFileStoreSaveAndLoad(t *testing.T) {
 	// Create store
 	store := &Store{
 		filepath: filepath.Join(tmpDir, "test_metadata.json"),
-		metadata: MetadataStore{
+		metadata: Data{
 			Backups:     make([]types.BackupMeta, 0),
 			Version:     "1.0",
 			LastUpdated: time.Now(),
@@ -71,7 +71,7 @@ func TestFileStoreSaveAndLoad(t *testing.T) {
 	// Create new store and load
 	store2 := &Store{
 		filepath: filepath.Join(tmpDir, "test_metadata.json"),
-		metadata: MetadataStore{
+		metadata: Data{
 			Backups: make([]types.BackupMeta, 0),
 		},
 	}
@@ -102,7 +102,7 @@ func TestFileStoreCorruptedFile(t *testing.T) {
 	// Try to load
 	store := &Store{
 		filepath: metadataPath,
-		metadata: MetadataStore{
+		metadata: Data{
 			Backups: make([]types.BackupMeta, 0),
 		},
 	}
@@ -121,7 +121,7 @@ func TestFileStorePartialWrite(t *testing.T) {
 	// Create store with data
 	store := &Store{
 		filepath: filepath.Join(tmpDir, "partial.json"),
-		metadata: MetadataStore{
+		metadata: Data{
 			Backups:     make([]types.BackupMeta, 0),
 			Version:     "1.0",
 			LastUpdated: time.Now(),
@@ -145,7 +145,7 @@ func TestFileStorePartialWrite(t *testing.T) {
 	// Try to load - should fail
 	store2 := &Store{
 		filepath: store.filepath,
-		metadata: MetadataStore{
+		metadata: Data{
 			Backups: make([]types.BackupMeta, 0),
 		},
 	}
@@ -179,7 +179,7 @@ func TestFileStoreNonExistentFile(t *testing.T) {
 
 	store := &Store{
 		filepath: filepath.Join(tmpDir, "new_metadata.json"),
-		metadata: MetadataStore{
+		metadata: Data{
 			Backups:     make([]types.BackupMeta, 0),
 			Version:     "1.0",
 			LastUpdated: time.Now(),
@@ -195,7 +195,7 @@ func TestFileStoreNonExistentFile(t *testing.T) {
 	data, err := ioutil.ReadFile(store.filepath)
 	require.NoError(t, err)
 
-	var loaded MetadataStore
+	var loaded Data
 	err = json.Unmarshal(data, &loaded)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(loaded.Backups))
@@ -210,7 +210,7 @@ func TestFileStoreConcurrentAccess(t *testing.T) {
 
 	store := &Store{
 		filepath: filepath.Join(tmpDir, "concurrent.json"),
-		metadata: MetadataStore{
+		metadata: Data{
 			Backups:     make([]types.BackupMeta, 0),
 			Version:     "1.0",
 			LastUpdated: time.Now(),
@@ -259,7 +259,7 @@ func TestFileStoreConcurrentAccess(t *testing.T) {
 
 	store2 := &Store{
 		filepath: store.filepath,
-		metadata: MetadataStore{
+		metadata: Data{
 			Backups: make([]types.BackupMeta, 0),
 		},
 	}
@@ -326,7 +326,7 @@ func TestFileStoreMetadataIntegrity(t *testing.T) {
 
 	store := &Store{
 		filepath: filepath.Join(tmpDir, "integrity.json"),
-		metadata: MetadataStore{
+		metadata: Data{
 			Backups:     make([]types.BackupMeta, 0),
 			Version:     "1.0",
 			LastUpdated: time.Now(),
@@ -346,7 +346,7 @@ func TestFileStoreMetadataIntegrity(t *testing.T) {
 
 	// Verify totals
 	assert.Equal(t, int64(1024+2048+8192), store.metadata.TotalLocalSize) // Excludes error backup
-	assert.Equal(t, int64(0), store.metadata.TotalS3Size)                  // No S3 uploads
+	assert.Equal(t, int64(0), store.metadata.TotalS3Size)                 // No S3 uploads
 
 	// Save and reload
 	err = store.Save()
@@ -354,7 +354,7 @@ func TestFileStoreMetadataIntegrity(t *testing.T) {
 
 	store2 := &Store{
 		filepath: store.filepath,
-		metadata: MetadataStore{
+		metadata: Data{
 			Backups: make([]types.BackupMeta, 0),
 		},
 	}

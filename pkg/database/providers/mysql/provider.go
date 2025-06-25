@@ -188,7 +188,7 @@ func (p *Provider) Validate() error {
 	}
 
 	// No validation for Databases field - we'll use include/exclude logic
-	
+
 	return nil
 }
 
@@ -197,12 +197,12 @@ func (p *Provider) GetDatabases() []string {
 	if p == nil {
 		return []string{}
 	}
-	
+
 	// For backward compatibility - if Databases is set, use it
 	if len(p.Databases) > 0 {
 		return p.Databases
 	}
-	
+
 	// We'll need to connect and get the actual list of databases
 	ctx := context.Background()
 	if p.db == nil {
@@ -212,16 +212,16 @@ func (p *Provider) GetDatabases() []string {
 		}
 		defer p.Close()
 	}
-	
+
 	// Get all available databases
 	allDBs, err := p.ListDatabases(ctx)
 	if err != nil {
 		// If we can't list databases, return an empty list
 		return []string{}
 	}
-	
+
 	// Apply filtering logic
-	
+
 	// If include list is not empty, use only those databases
 	if len(p.IncludeDatabases) > 0 {
 		var filtered []string
@@ -236,7 +236,7 @@ func (p *Provider) GetDatabases() []string {
 		}
 		return filtered
 	}
-	
+
 	// If only exclude list is specified, use all databases except those
 	if len(p.ExcludeDatabases) > 0 {
 		var filtered []string
@@ -255,7 +255,7 @@ func (p *Provider) GetDatabases() []string {
 		}
 		return filtered
 	}
-	
+
 	// Both lists are empty, return all databases
 	return allDBs
 }

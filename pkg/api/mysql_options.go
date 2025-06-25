@@ -11,23 +11,27 @@ import (
 	"github.com/supporttools/GoSQLGuard/pkg/metadata"
 )
 
+// MySQLOptionsHandler handles MySQL-specific database options API endpoints
 type MySQLOptionsHandler struct {
 	Config *config.AppConfig
 	Logger *logrus.Logger
 }
 
+// MySQLOptionsRequest represents a request for MySQL database options
 type MySQLOptionsRequest struct {
 	Global    *database.MySQLDumpOptions            `json:"global,omitempty"`
 	PerServer map[string]*database.MySQLDumpOptions `json:"per_server,omitempty"`
 }
 
+// MySQLOptionsResponse represents the response containing MySQL database options
 type MySQLOptionsResponse struct {
-	Success bool                                  `json:"success"`
-	Message string                                `json:"message"`
-	Global  *config.MySQLDumpOptionsConfig        `json:"global,omitempty"`
+	Success   bool                                      `json:"success"`
+	Message   string                                    `json:"message"`
+	Global    *config.MySQLDumpOptionsConfig            `json:"global,omitempty"`
 	PerServer map[string]*config.MySQLDumpOptionsConfig `json:"per_server,omitempty"`
 }
 
+// NewMySQLOptionsHandler creates a new handler for MySQL options endpoints
 func NewMySQLOptionsHandler(cfg *config.AppConfig, logger *logrus.Logger) *MySQLOptionsHandler {
 	return &MySQLOptionsHandler{
 		Config: cfg,
@@ -35,6 +39,7 @@ func NewMySQLOptionsHandler(cfg *config.AppConfig, logger *logrus.Logger) *MySQL
 	}
 }
 
+// RegisterRoutes registers the MySQL options API routes
 func (h *MySQLOptionsHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mysql-options", h.handleMySQLOptions)
 	mux.HandleFunc("/api/mysql-options/server", h.handleServerMySQLOptions)
@@ -53,8 +58,8 @@ func (h *MySQLOptionsHandler) handleMySQLOptions(w http.ResponseWriter, r *http.
 
 func (h *MySQLOptionsHandler) getMySQLOptions(w http.ResponseWriter, r *http.Request) {
 	response := MySQLOptionsResponse{
-		Success: true,
-		Global:  &h.Config.MySQLDumpOptions,
+		Success:   true,
+		Global:    &h.Config.MySQLDumpOptions,
 		PerServer: make(map[string]*config.MySQLDumpOptionsConfig),
 	}
 

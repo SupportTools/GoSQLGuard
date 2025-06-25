@@ -14,11 +14,11 @@ import (
 
 // DatabasesPageData holds data for the databases browsing page
 type DatabasesPageData struct {
-	Servers         []string                  // List of server names
-	ServerDatabases map[string][]string       // Map of server name to list of databases
-	SelectedServer  string                    // Currently selected server
-	SelectedDB      string                    // Currently selected database
-	DBBackups       []types.BackupMeta     // Backups for the selected database
+	Servers         []string            // List of server names
+	ServerDatabases map[string][]string // Map of server name to list of databases
+	SelectedServer  string              // Currently selected server
+	SelectedDB      string              // Currently selected database
+	DBBackups       []types.BackupMeta  // Backups for the selected database
 	BackupTypes     map[string]config.BackupTypeConfig
 	LocalEnabled    bool
 	S3Enabled       bool
@@ -367,7 +367,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	var err error
 	tmpl, err = tmpl.Parse(contentTemplate)
 	if err != nil {
-		http.Error(w, "Template parsing error: " + err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Template parsing error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -384,7 +384,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	data.S3Enabled = config.CFG.S3.Enabled
 	data.LastUpdated = time.Now()
 	data.ServerDatabases = make(map[string][]string)
-	
+
 	// Populate server list
 	if len(config.CFG.DatabaseServers) > 0 {
 		// Get servers from multi-server configuration
@@ -395,11 +395,11 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Legacy configuration has a single server
 		data.Servers = append(data.Servers, "default")
 	}
-	
+
 	// Get databases for each server
 	for _, serverName := range data.Servers {
 		var databases []string
-		
+
 		// Find the server configuration
 		var serverConfig *config.DatabaseServerConfig
 		for i := range config.CFG.DatabaseServers {
@@ -408,7 +408,7 @@ document.addEventListener('DOMContentLoaded', function() {
 				break
 			}
 		}
-		
+
 		if serverConfig != nil {
 			// Using multi-server configuration
 			if len(serverConfig.IncludeDatabases) > 0 {
@@ -428,7 +428,7 @@ document.addEventListener('DOMContentLoaded', function() {
 						for _, db := range serverConfig.ExcludeDatabases {
 							excludeMap[db] = true
 						}
-						
+
 						for _, db := range queryDatabases {
 							if !excludeMap[db] {
 								databases = append(databases, db)
@@ -456,7 +456,7 @@ document.addEventListener('DOMContentLoaded', function() {
 						for _, db := range config.CFG.MySQL.ExcludeDatabases {
 							excludeMap[db] = true
 						}
-						
+
 						for _, db := range queryDatabases {
 							if !excludeMap[db] {
 								databases = append(databases, db)
@@ -468,11 +468,11 @@ document.addEventListener('DOMContentLoaded', function() {
 				}
 			}
 		}
-		
+
 		// Add databases to the map
 		data.ServerDatabases[serverName] = databases
 	}
-	
+
 	// If a database is selected, get its backups
 	if selectedDB != "" && metadata.DefaultStore != nil {
 		// Use selected server for filtering backups

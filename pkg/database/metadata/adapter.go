@@ -13,12 +13,12 @@ import (
 
 // DBMetadataStore is a database-backed implementation of the metadata store interface
 type DBMetadataStore struct {
-	repo         *Repository
-	mutex        sync.RWMutex
-	filepath     string // For backward compatibility
-	s3Key        string // For backward compatibility
-	fileStore    types.MetadataStore // Optional fallback for reading existing metadata
-	initialized  bool
+	repo        *Repository
+	mutex       sync.RWMutex
+	filepath    string              // For backward compatibility
+	s3Key       string              // For backward compatibility
+	fileStore   types.MetadataStore // Optional fallback for reading existing metadata
+	initialized bool
 }
 
 // NewDBMetadataStore creates a new database-backed metadata store
@@ -118,7 +118,7 @@ func (s *DBMetadataStore) MigrateFromFileStore() error {
 	}
 
 	// Recalculate stats
-	if err := s.repo.RecalculateMetadataStats(); err != nil {
+	if err := s.repo.RecalculateStats(); err != nil {
 		log.Printf("Warning: Failed to recalculate stats after migration: %v", err)
 	}
 
@@ -145,8 +145,8 @@ func (s *DBMetadataStore) CreateBackupMeta(serverName, serverType, database, bac
 			duration, err := time.ParseDuration(typeConfig.Local.Retention.Duration)
 			if err == nil {
 				expiresAt = time.Now().Add(duration)
-				retentionText = fmt.Sprintf("Keep for %s (until %s)", 
-					typeConfig.Local.Retention.Duration, 
+				retentionText = fmt.Sprintf("Keep for %s (until %s)",
+					typeConfig.Local.Retention.Duration,
 					expiresAt.Format("2006-01-02 15:04:05"))
 			} else {
 				retentionText = "Unknown retention policy"

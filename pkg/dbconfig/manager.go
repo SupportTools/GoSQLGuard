@@ -19,19 +19,19 @@ type ConfigRefresher interface {
 
 // Manager handles loading and updating configuration from the database
 type Manager struct {
-	db                *gorm.DB
-	serverRepository  *metadata.ServerRepository
+	db                 *gorm.DB
+	serverRepository   *metadata.ServerRepository
 	scheduleRepository *metadata.ScheduleRepository
-	refreshListeners  []ConfigRefresher
+	refreshListeners   []ConfigRefresher
 }
 
 // NewManager creates a new configuration manager
 func NewManager(db *gorm.DB) *Manager {
 	return &Manager{
-		db:                db,
-		serverRepository:  metadata.NewServerRepository(db),
+		db:                 db,
+		serverRepository:   metadata.NewServerRepository(db),
 		scheduleRepository: metadata.NewScheduleRepository(db),
-		refreshListeners:  make([]ConfigRefresher, 0),
+		refreshListeners:   make([]ConfigRefresher, 0),
 	}
 }
 
@@ -196,7 +196,7 @@ func (m *Manager) SaveServer(serverCfg configtypes.ServerConfig) error {
 		} else {
 			server.ID = serverCfg.ID
 		}
-		
+
 		// Add include databases
 		for _, dbName := range serverCfg.IncludeDatabases {
 			server.DatabaseFilters = append(server.DatabaseFilters, metadata.ServerDatabaseFilter{
@@ -265,19 +265,19 @@ func (m *Manager) SaveSchedule(scheduleCfg configtypes.ScheduleConfig) error {
 	// Add retention policies
 	if scheduleCfg.LocalStorage.Enabled {
 		schedule.RetentionPolicies = append(schedule.RetentionPolicies, metadata.ScheduleRetentionPolicy{
-			StorageType:  "local",
-			Duration:     scheduleCfg.LocalStorage.Duration,
-			KeepForever:  scheduleCfg.LocalStorage.KeepForever,
-			CreatedAt:    time.Now(),
+			StorageType: "local",
+			Duration:    scheduleCfg.LocalStorage.Duration,
+			KeepForever: scheduleCfg.LocalStorage.KeepForever,
+			CreatedAt:   time.Now(),
 		})
 	}
 
 	if scheduleCfg.S3Storage.Enabled {
 		schedule.RetentionPolicies = append(schedule.RetentionPolicies, metadata.ScheduleRetentionPolicy{
-			StorageType:  "s3",
-			Duration:     scheduleCfg.S3Storage.Duration,
-			KeepForever:  scheduleCfg.S3Storage.KeepForever,
-			CreatedAt:    time.Now(),
+			StorageType: "s3",
+			Duration:    scheduleCfg.S3Storage.Duration,
+			KeepForever: scheduleCfg.S3Storage.KeepForever,
+			CreatedAt:   time.Now(),
 		})
 	}
 
@@ -300,7 +300,7 @@ func (m *Manager) SaveSchedule(scheduleCfg configtypes.ScheduleConfig) error {
 		} else {
 			schedule.ID = scheduleCfg.ID
 		}
-		
+
 		if err := m.scheduleRepository.CreateSchedule(&schedule); err != nil {
 			return fmt.Errorf("failed to create schedule configuration: %w", err)
 		}

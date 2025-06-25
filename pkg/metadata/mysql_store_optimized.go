@@ -31,14 +31,14 @@ type PaginatedResult struct {
 // QueryOptions represents options for querying backups
 type QueryOptions struct {
 	// Filtering
-	ServerName    string
-	DatabaseName  string
-	BackupType    string
-	Status        string
-	StartDate     *time.Time
-	EndDate       *time.Time
-	SearchTerm    string
-	ActiveOnly    bool
+	ServerName   string
+	DatabaseName string
+	BackupType   string
+	Status       string
+	StartDate    *time.Time
+	EndDate      *time.Time
+	SearchTerm   string
+	ActiveOnly   bool
 
 	// Pagination
 	Page     int
@@ -104,7 +104,7 @@ func AddPerformanceIndexes(db *gorm.DB) error {
 	for _, idx := range indexes {
 		sql := fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s (%s)",
 			idx.Name, idx.Table, joinColumns(idx.Columns))
-		
+
 		if err := db.Exec(sql).Error; err != nil {
 			log.Printf("Warning: Failed to create index %s: %v", idx.Name, err)
 			// Continue with other indexes even if one fails
@@ -274,7 +274,7 @@ func (s *DBStore) GetStatsOptimized() (map[string]interface{}, error) {
 					COALESCE(SUM(CASE WHEN s3_upload_status = ? THEN size ELSE 0 END), 0) as total_s3_size
 				`, string(StatusSuccess), string(StatusSuccess)).
 				Scan(&stats).Error
-			
+
 			return queryResult{
 				name: "totals",
 				value: map[string]interface{}{
@@ -356,10 +356,10 @@ func (s *DBStore) GetStatsOptimized() (map[string]interface{}, error) {
 					COUNT(CASE WHEN created_at >= ? THEN 1 END) as last24_hours,
 					COUNT(CASE WHEN created_at >= ? THEN 1 END) as last7_days,
 					COUNT(CASE WHEN created_at >= ? THEN 1 END) as last30_days
-				`, 
-				now.Add(-24*time.Hour),
-				now.Add(-7*24*time.Hour),
-				now.Add(-30*24*time.Hour)).
+				`,
+					now.Add(-24*time.Hour),
+					now.Add(-7*24*time.Hour),
+					now.Add(-30*24*time.Hour)).
 				Scan(&activity).Error
 
 			return queryResult{
@@ -403,7 +403,7 @@ func (s *DBStore) GetStatsOptimized() (map[string]interface{}, error) {
 		Order("completed_at DESC").
 		Limit(1).
 		Scan(&lastBackup).Error
-	
+
 	if err == nil && !lastBackup.CompletedAt.IsZero() {
 		result["lastBackupTime"] = lastBackup.CompletedAt
 	}

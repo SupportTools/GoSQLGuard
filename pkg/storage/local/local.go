@@ -32,12 +32,12 @@ func NewClient() (*Client, error) {
 // EnsureBackupPath ensures the backup directory exists
 func (c *Client) EnsureBackupPath(backupType string) (string, error) {
 	backupDir := filepath.Join(c.cfg.Local.BackupDirectory, backupType)
-	
+
 	// Ensure the directory exists
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create backup directory %s: %w", backupDir, err)
 	}
-	
+
 	return backupDir, nil
 }
 
@@ -47,7 +47,7 @@ func (c *Client) GetBackupPath(backupType, backupFileName string) (string, error
 	if err != nil {
 		return "", err
 	}
-	
+
 	return filepath.Join(backupDir, backupFileName), nil
 }
 
@@ -58,10 +58,10 @@ func (c *Client) RecordBackupMetrics(backupPath, backupType, database string) er
 	if err != nil {
 		return fmt.Errorf("failed to stat backup file: %w", err)
 	}
-	
+
 	sizeBytes := float64(fileInfo.Size())
 	metrics.BackupSize.WithLabelValues(backupType, database, "local").Set(sizeBytes)
-	
+
 	return nil
 }
 
@@ -129,13 +129,13 @@ func (c *Client) EnforceRetention() error {
 							break
 						}
 					}
-					
+
 					log.Printf("Removed expired local backup: %s", file)
 					metrics.BackupRetentionDeletes.WithLabelValues(backupType, "local").Inc()
 				}
 			}
 		}
 	}
-	
+
 	return nil
 }

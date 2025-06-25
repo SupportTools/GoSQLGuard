@@ -21,19 +21,19 @@ func NewScheduleRepository(db *gorm.DB) *ScheduleRepository {
 // GetAllSchedules retrieves all backup schedules
 func (r *ScheduleRepository) GetAllSchedules() ([]BackupSchedule, error) {
 	var schedules []BackupSchedule
-	
+
 	err := r.db.Preload("RetentionPolicies").Find(&schedules).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schedules: %w", err)
 	}
-	
+
 	return schedules, nil
 }
 
 // GetScheduleByID retrieves a backup schedule by ID
 func (r *ScheduleRepository) GetScheduleByID(id string) (*BackupSchedule, error) {
 	var schedule BackupSchedule
-	
+
 	err := r.db.Preload("RetentionPolicies").Where("id = ?", id).First(&schedule).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -41,14 +41,14 @@ func (r *ScheduleRepository) GetScheduleByID(id string) (*BackupSchedule, error)
 		}
 		return nil, fmt.Errorf("failed to get schedule: %w", err)
 	}
-	
+
 	return &schedule, nil
 }
 
 // GetScheduleByName retrieves a backup schedule by name
 func (r *ScheduleRepository) GetScheduleByName(name string) (*BackupSchedule, error) {
 	var schedule BackupSchedule
-	
+
 	err := r.db.Preload("RetentionPolicies").Where("name = ?", name).First(&schedule).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -56,19 +56,19 @@ func (r *ScheduleRepository) GetScheduleByName(name string) (*BackupSchedule, er
 		}
 		return nil, fmt.Errorf("failed to get schedule: %w", err)
 	}
-	
+
 	return &schedule, nil
 }
 
 // GetEnabledSchedules retrieves all enabled backup schedules
 func (r *ScheduleRepository) GetEnabledSchedules() ([]BackupSchedule, error) {
 	var schedules []BackupSchedule
-	
+
 	err := r.db.Preload("RetentionPolicies").Where("enabled = ?", true).Find(&schedules).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get enabled schedules: %w", err)
 	}
-	
+
 	return schedules, nil
 }
 
@@ -78,29 +78,29 @@ func (r *ScheduleRepository) CreateSchedule(schedule *BackupSchedule) error {
 	if schedule.ID == "" {
 		schedule.ID = uuid.New().String()
 	}
-	
+
 	// Set timestamps
 	now := time.Now()
 	schedule.CreatedAt = now
 	schedule.UpdatedAt = now
-	
+
 	// Start a transaction
 	tx := r.db.Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("failed to begin transaction: %w", tx.Error)
 	}
-	
+
 	// Create the schedule
 	if err := tx.Create(schedule).Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("failed to create schedule: %w", err)
 	}
-	
+
 	// Commit the transaction
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -114,33 +114,33 @@ func (r *ScheduleRepository) UpdateSchedule(schedule *BackupSchedule) error {
 	if !exists {
 		return fmt.Errorf("schedule not found: %s", schedule.ID)
 	}
-	
+
 	// Update timestamp
 	schedule.UpdatedAt = time.Now()
-	
+
 	// Start a transaction
 	tx := r.db.Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("failed to begin transaction: %w", tx.Error)
 	}
-	
+
 	// Delete existing retention policies to replace them
 	if err := tx.Where("schedule_id = ?", schedule.ID).Delete(&ScheduleRetentionPolicy{}).Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("failed to delete existing retention policies: %w", err)
 	}
-	
+
 	// Update the schedule
 	if err := tx.Save(schedule).Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("failed to update schedule: %w", err)
 	}
-	
+
 	// Commit the transaction
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -151,18 +151,18 @@ func (r *ScheduleRepository) DeleteSchedule(id string) error {
 	if tx.Error != nil {
 		return fmt.Errorf("failed to begin transaction: %w", tx.Error)
 	}
-	
+
 	// Delete the schedule (cascade will delete related retention policies)
 	if err := tx.Delete(&BackupSchedule{ID: id}).Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("failed to delete schedule: %w", err)
 	}
-	
+
 	// Commit the transaction
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
-	
+
 	return nil
 }
 

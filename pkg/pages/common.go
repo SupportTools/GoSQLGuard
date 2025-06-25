@@ -90,7 +90,7 @@ func generateCommonTemplate() *template.Template {
 			}
 		},
 		"formatDuration": formatDuration,
-		"timeAgo": humanize.Time,
+		"timeAgo":        humanize.Time,
 		"safeHTML": func(s string) template.HTML {
 			return template.HTML(s)
 		},

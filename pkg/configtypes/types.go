@@ -3,14 +3,14 @@ package configtypes
 
 // ServerConfig represents a database server configuration
 type ServerConfig struct {
-	ID              string
-	Name            string
-	Type            string
-	Host            string
-	Port            string
-	Username        string
-	Password        string
-	AuthPlugin      string
+	ID               string
+	Name             string
+	Type             string
+	Host             string
+	Port             string
+	Username         string
+	Password         string
+	AuthPlugin       string
 	IncludeDatabases []string
 	ExcludeDatabases []string
 	// MySQL options would be added here

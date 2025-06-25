@@ -35,8 +35,8 @@ const (
 	backupTypeKey contextKey = "backupType"
 )
 
-// BackupOptions defines options for a backup operation
-type BackupOptions struct {
+// Options defines options for a backup operation
+type Options struct {
 	Servers   []string // List of server names to back up, empty means all servers
 	Databases []string // List of databases to back up, empty means all databases
 }
@@ -139,9 +139,9 @@ func NewManager() (*Manager, error) {
 // PerformBackup executes a backup operation for the specified type
 // If options.Servers is provided, only back up those servers
 // If options.Databases is provided, only back up those databases
-func (m *Manager) PerformBackup(backupType string, options ...BackupOptions) error {
+func (m *Manager) PerformBackup(backupType string, options ...Options) error {
 	// Process optional parameters
-	var opts BackupOptions
+	var opts Options
 	if len(options) > 0 {
 		opts = options[0]
 	}
@@ -605,7 +605,7 @@ func (m *Manager) backupDatabase(serverName, serverType, database, backupType st
 			// Extra details about the options being used (for better troubleshooting)
 			fmt.Fprintf(logFile, "MySQL hardcoded options applied:\n")
 			fmt.Fprintf(logFile, "- Single transaction: true\n")
-			fmt.Fprintf(logFile, "- Quick: true\n") 
+			fmt.Fprintf(logFile, "- Quick: true\n")
 			fmt.Fprintf(logFile, "- Triggers: true\n")
 			fmt.Fprintf(logFile, "- Routines: true\n")
 			fmt.Fprintf(logFile, "- Events: true\n")

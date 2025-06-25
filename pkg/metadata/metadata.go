@@ -33,18 +33,18 @@ const (
 	StatusDeleted = types.StatusDeleted
 )
 
-// MetadataStore manages backup metadata
-type MetadataStore struct {
-	Backups          []types.BackupMeta `json:"backups"`
-	LastUpdated      time.Time          `json:"lastUpdated"`
-	TotalLocalSize   int64              `json:"totalLocalSize"`
-	TotalS3Size      int64              `json:"totalS3Size"`
-	Version          string             `json:"version"`
+// Data holds the backup metadata information
+type Data struct {
+	Backups        []types.BackupMeta `json:"backups"`
+	LastUpdated    time.Time          `json:"lastUpdated"`
+	TotalLocalSize int64              `json:"totalLocalSize"`
+	TotalS3Size    int64              `json:"totalS3Size"`
+	Version        string             `json:"version"`
 }
 
 // Store is the global metadata store instance
 type Store struct {
-	metadata MetadataStore
+	metadata Data
 	mutex    sync.RWMutex
 	filepath string
 	s3Key    string
@@ -61,7 +61,7 @@ func GetActiveStore() types.MetadataStore {
 	if DefaultStore != nil {
 		return DefaultStore
 	}
-	
+
 	// No store available
 	return nil
 }
@@ -79,7 +79,7 @@ func Initialize() error {
 
 	// Create file-based store
 	store := &Store{
-		metadata: MetadataStore{
+		metadata: Data{
 			Backups:     make([]types.BackupMeta, 0),
 			LastUpdated: time.Now(),
 			Version:     "1.0",
@@ -227,8 +227,8 @@ func (s *Store) CreateBackupMeta(serverName, serverType, database, backupType st
 			duration, err := time.ParseDuration(typeConfig.Local.Retention.Duration)
 			if err == nil {
 				expiresAt = time.Now().Add(duration)
-				retentionText = fmt.Sprintf("Keep for %s (until %s)", 
-					typeConfig.Local.Retention.Duration, 
+				retentionText = fmt.Sprintf("Keep for %s (until %s)",
+					typeConfig.Local.Retention.Duration,
 					expiresAt.Format("2006-01-02 15:04:05"))
 			} else {
 				retentionText = "Unknown retention policy"
@@ -272,7 +272,7 @@ func (s *Store) UpdateBackupStatus(id string, status types.BackupStatus, localPa
 			// Update fields
 			s.metadata.Backups[i].Status = status
 			s.metadata.Backups[i].LocalPaths = localPaths
-			
+
 			// For backward compatibility, set the primary LocalPath to by-server or the first path
 			if len(localPaths) > 0 {
 				if byServer, ok := localPaths["by-server"]; ok {
@@ -285,7 +285,7 @@ func (s *Store) UpdateBackupStatus(id string, status types.BackupStatus, localPa
 					}
 				}
 			}
-			
+
 			s.metadata.Backups[i].Size = size
 			s.metadata.Backups[i].ErrorMessage = errorMsg
 			s.metadata.Backups[i].CompletedAt = time.Now()
@@ -310,7 +310,7 @@ func (s *Store) UpdateS3UploadStatus(id string, status types.BackupStatus, s3Key
 			s.metadata.Backups[i].S3UploadStatus = status
 			s.metadata.Backups[i].S3Keys = s3Keys
 			s.metadata.Backups[i].S3UploadError = errorMsg
-			
+
 			// For backward compatibility, set the primary S3Key to by-server or the first key
 			if len(s3Keys) > 0 {
 				if byServer, ok := s3Keys["by-server"]; ok {
@@ -323,7 +323,7 @@ func (s *Store) UpdateS3UploadStatus(id string, status types.BackupStatus, s3Key
 					}
 				}
 			}
-			
+
 			if status != types.StatusPending {
 				s.metadata.Backups[i].S3UploadComplete = time.Now()
 			}
@@ -406,7 +406,7 @@ func (s *Store) MarkBackupDeleted(id string) error {
 		if backup.ID == id {
 			// Mark as deleted
 			s.metadata.Backups[i].Status = types.StatusDeleted
-			
+
 			// Save changes
 			return s.save()
 		}
@@ -421,11 +421,11 @@ func (s *Store) GetStats() map[string]interface{} {
 	defer s.mutex.RUnlock()
 
 	stats := map[string]interface{}{
-		"totalCount":       len(s.metadata.Backups),
-		"totalLocalSize":   s.metadata.TotalLocalSize,
-		"totalS3Size":      s.metadata.TotalS3Size,
-		"lastBackupTime":   nil,
-		"typeDistribution": make(map[string]int),
+		"totalCount":         len(s.metadata.Backups),
+		"totalLocalSize":     s.metadata.TotalLocalSize,
+		"totalS3Size":        s.metadata.TotalS3Size,
+		"lastBackupTime":     nil,
+		"typeDistribution":   make(map[string]int),
 		"serverDistribution": make(map[string]int),
 		"statusCounts": map[string]int{
 			"success": 0,
@@ -444,16 +444,16 @@ func (s *Store) GetStats() map[string]interface{} {
 	for _, backup := range s.metadata.Backups {
 		// Count by status
 		stats["statusCounts"].(map[string]int)[string(backup.Status)]++
-		
+
 		// Count by type
 		typeCount[backup.BackupType]++
-		
+
 		// Count by database
 		databaseCount[backup.Database]++
-		
+
 		// Count by server
 		serverCount[backup.ServerName]++
-		
+
 		// Track last backup time
 		if backup.Status == types.StatusSuccess && backup.CompletedAt.After(lastBackupTime) {
 			lastBackupTime = backup.CompletedAt
@@ -478,7 +478,7 @@ func (s *Store) UpdateLogFilePath(id string, logFilePath string) error {
 		if backup.ID == id {
 			// Update log file path
 			s.metadata.Backups[i].LogFilePath = logFilePath
-			
+
 			// Save changes
 			return s.save()
 		}

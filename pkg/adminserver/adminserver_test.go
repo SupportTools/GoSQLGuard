@@ -22,12 +22,12 @@ func TestRunBackupHandler_Validation(t *testing.T) {
 			{Name: "server2", Type: "postgresql"},
 		},
 	}
-	
+
 	// Create server without scheduler to test validation only
 	server := &Server{
 		scheduler: nil,
 	}
-	
+
 	tests := []struct {
 		name           string
 		method         string
@@ -65,24 +65,24 @@ func TestRunBackupHandler_Validation(t *testing.T) {
 			expectedStatus: http.StatusInternalServerError,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset task running state
 			taskLock.Lock()
 			isTaskRunning = false
 			taskLock.Unlock()
-			
+
 			// Create request
 			req, err := http.NewRequest(tt.method, "/api/backups/run"+tt.query, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
-			
+
 			// Record response
 			rr := httptest.NewRecorder()
 			server.runBackupHandler(rr, req)
-			
+
 			// Check status code
 			if status := rr.Code; status != tt.expectedStatus {
 				t.Errorf("handler returned wrong status code: got %v want %v", status, tt.expectedStatus)
@@ -97,7 +97,7 @@ func TestRunRetentionHandler_Validation(t *testing.T) {
 	server := &Server{
 		scheduler: nil,
 	}
-	
+
 	tests := []struct {
 		name           string
 		method         string
@@ -114,24 +114,24 @@ func TestRunRetentionHandler_Validation(t *testing.T) {
 			expectedStatus: http.StatusInternalServerError,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset task running state
 			taskLock.Lock()
 			isTaskRunning = false
 			taskLock.Unlock()
-			
+
 			// Create request
 			req, err := http.NewRequest(tt.method, "/api/retention/run", nil)
 			if err != nil {
 				t.Fatal(err)
 			}
-			
+
 			// Record response
 			rr := httptest.NewRecorder()
 			server.runRetentionHandler(rr, req)
-			
+
 			// Check status code
 			if status := rr.Code; status != tt.expectedStatus {
 				t.Errorf("handler returned wrong status code: got %v want %v", status, tt.expectedStatus)
@@ -143,30 +143,30 @@ func TestRunRetentionHandler_Validation(t *testing.T) {
 // TestHealthCheck tests the health check endpoint
 func TestHealthCheck(t *testing.T) {
 	server := &Server{}
-	
+
 	req, err := http.NewRequest("GET", "/healthz", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	rr := httptest.NewRecorder()
 	server.healthCheckHandler(rr, req)
-	
+
 	// Check status code
 	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
-	
+
 	// Check response
 	var response map[string]string
 	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
 		t.Errorf("Failed to parse response: %v", err)
 	}
-	
+
 	if response["status"] != "healthy" {
 		t.Errorf("Expected status='healthy', got %v", response["status"])
 	}
-	
+
 	if response["time"] == "" {
 		t.Errorf("Expected time field to be present")
 	}

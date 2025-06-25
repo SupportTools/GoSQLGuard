@@ -75,7 +75,7 @@ func Connect() (*gorm.DB, error) {
 	if cfg.ConnMaxLifetime != "" {
 		duration, err := time.ParseDuration(cfg.ConnMaxLifetime)
 		if err != nil {
-			log.Printf("Warning: Invalid connection max lifetime '%s', using default 5m: %v", 
+			log.Printf("Warning: Invalid connection max lifetime '%s', using default 5m: %v",
 				cfg.ConnMaxLifetime, err)
 			duration = 5 * time.Minute
 		}
@@ -93,7 +93,7 @@ func RunMigrations(db *gorm.DB) error {
 		&Backup{},
 		&LocalPath{},
 		&S3Key{},
-		&MetadataStats{},
+		&Stats{},
 		&ServerConfig{},
 		&ServerDatabaseFilter{},
 		&ServerMySQLOption{},
@@ -106,10 +106,10 @@ func RunMigrations(db *gorm.DB) error {
 
 	// Initialize stats record if it doesn't exist
 	var count int64
-	db.Model(&MetadataStats{}).Count(&count)
+	db.Model(&Stats{}).Count(&count)
 	if count == 0 {
 		log.Println("Initializing metadata stats record")
-		stats := MetadataStats{
+		stats := Stats{
 			ID:          1,
 			Version:     "1.0",
 			LastUpdated: time.Now(),

@@ -89,10 +89,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/status/storage", pages.StorageStatusPage)
 	mux.HandleFunc("/databases", pages.DatabasesPage)
 	mux.HandleFunc("/s3download", pages.S3DownloadPage)
-	mux.HandleFunc("/servers", handlers.ServersHandler) // Servers management page
-	mux.HandleFunc("/mysql-options", pages.MySQLOptionsPage) // MySQL dump options configuration
+	mux.HandleFunc("/servers", handlers.ServersHandler)             // Servers management page
+	mux.HandleFunc("/mysql-options", pages.MySQLOptionsPage)        // MySQL dump options configuration
 	mux.HandleFunc("/configuration", handlers.ConfigurationHandler) // Configuration management page
-	
+
 	// Standard endpoints
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/healthz", s.healthCheckHandler)
@@ -105,23 +105,23 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/backups/log", s.serveLogFileHandler)
 	mux.HandleFunc("/api/backups/download/local", s.downloadLocalBackupHandler)
 	mux.HandleFunc("/api/backups/download/s3", s.downloadS3BackupHandler)
-	
+
 	// Storage operations
 	mux.HandleFunc("/api/storage", s.storageInfoHandler)
 	mux.HandleFunc("/api/retention/run", s.runRetentionHandler)
-	
+
 	// HTMX endpoints
 	mux.HandleFunc("/api/dashboard/recent-backups", handlers.RecentBackupsHandler)
-	
+
 	// MySQL options operations
 	mux.HandleFunc("/api/mysql-options/global", s.mysqlOptionsHandler)
-	
+
 	// Server and schedule management API
 	serverHandler := api.NewServerHandler()
 	scheduleHandler := api.NewScheduleHandler(s.scheduler)
 	serverHandler.RegisterRoutes(mux)
 	scheduleHandler.RegisterRoutes(mux)
-	
+
 	// Configuration management API
 	// TODO: Implement config handler
 	// configHandler, err := api.NewConfigHandler()
@@ -130,7 +130,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// } else {
 	// 	configHandler.RegisterRoutes(mux)
 	// }
-	
+
 	// S3 configuration API
 	logger := logrus.New()
 	if config.CFG.Debug {
@@ -138,11 +138,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	}
 	s3Handler := api.NewS3ConfigHandler(&config.CFG, logger)
 	s3Handler.RegisterRoutes(mux)
-	
+
 	// MySQL options configuration API
 	mysqlOptionsHandler := api.NewMySQLOptionsHandler(&config.CFG, nil)
 	mysqlOptionsHandler.RegisterRoutes(mux)
-	
+
 	// PostgreSQL options configuration API
 	postgresqlOptionsHandler := api.NewPostgreSQLOptionsHandler(&config.CFG, nil)
 	postgresqlOptionsHandler.RegisterRoutes(mux)
@@ -170,9 +170,9 @@ func (s *Server) statsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Metadata store not available", http.StatusServiceUnavailable)
 		return
 	}
-	
+
 	stats := metadataStore.GetStats()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(stats); err != nil {
 		log.Printf("Error encoding stats response: %v", err)
@@ -186,7 +186,7 @@ func (s *Server) listBackupsHandler(w http.ResponseWriter, r *http.Request) {
 	database := r.URL.Query().Get("database")
 	backupType := r.URL.Query().Get("type")
 	activeOnly := r.URL.Query().Get("activeOnly") == "true"
-	
+
 	// Get the active metadata store
 	metadataStore := metadata.GetActiveStore()
 	if metadataStore == nil {
@@ -194,9 +194,9 @@ func (s *Server) listBackupsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Metadata store not available", http.StatusServiceUnavailable)
 		return
 	}
-	
+
 	backups := metadataStore.GetBackupsFiltered("", database, backupType, activeOnly)
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"backups": backups,
@@ -215,36 +215,36 @@ func (s *Server) runBackupHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	// Get parameters
 	backupType := r.URL.Query().Get("type")
 	databaseParam := r.URL.Query().Get("database")
 	serverParam := r.URL.Query().Get("server")
-	
+
 	// Validate parameters
 	if backupType == "" {
 		http.Error(w, "Missing required parameter: type", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Parse server list (comma-separated)
 	var servers []string
 	if serverParam != "" {
 		servers = strings.Split(serverParam, ",")
 	}
-	
+
 	// Parse database list (comma-separated)
 	var databases []string
 	if databaseParam != "" {
 		databases = strings.Split(databaseParam, ",")
 	}
-	
+
 	// Check if the backup type exists
 	if _, exists := config.CFG.BackupTypes[backupType]; !exists {
 		http.Error(w, fmt.Sprintf("Invalid backup type: %s", backupType), http.StatusBadRequest)
 		return
 	}
-	
+
 	// Validate servers if specified
 	if len(servers) > 0 {
 		for _, serverName := range servers {
@@ -256,40 +256,40 @@ func (s *Server) runBackupHandler(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 			}
-			
+
 			if !serverExists {
 				http.Error(w, fmt.Sprintf("Server not found: %s", serverName), http.StatusBadRequest)
 				return
 			}
 		}
 	}
-	
+
 	// Check if scheduler is available
 	if s.scheduler == nil {
 		http.Error(w, "Scheduler not configured", http.StatusInternalServerError)
 		return
 	}
-	
+
 	// Check if a task is already running
 	if !triggerBackup(s, backupType, servers, databases) {
 		http.Error(w, "A backup task is already running", http.StatusConflict)
 		return
 	}
-	
+
 	// Return success
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	
+
 	response := map[string]string{
 		"status":  "accepted",
 		"message": fmt.Sprintf("Backup of type %s initiated", backupType),
 	}
-	
+
 	if len(databases) > 0 {
-		response["message"] = fmt.Sprintf("Backup of databases %s (type: %s) initiated", 
+		response["message"] = fmt.Sprintf("Backup of databases %s (type: %s) initiated",
 			strings.Join(databases, ", "), backupType)
 	}
-	
+
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
@@ -302,14 +302,14 @@ func (s *Server) deleteBackupHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	// Get backup ID
 	backupID := r.URL.Query().Get("id")
 	if backupID == "" {
 		http.Error(w, "Missing required parameter: id", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Get the active metadata store
 	metadataStore := metadata.GetActiveStore()
 	if metadataStore == nil {
@@ -317,31 +317,31 @@ func (s *Server) deleteBackupHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Metadata store not available", http.StatusServiceUnavailable)
 		return
 	}
-	
+
 	// Check if the backup exists
 	backup, exists := metadataStore.GetBackupByID(backupID)
 	if !exists {
 		http.Error(w, fmt.Sprintf("Backup with ID %s not found", backupID), http.StatusNotFound)
 		return
 	}
-	
+
 	// Mark as deleted in metadata
 	if err := metadataStore.MarkBackupDeleted(backupID); err != nil {
 		log.Printf("Error marking backup as deleted: %v", err)
 		http.Error(w, "Error deleting backup", http.StatusInternalServerError)
 		return
 	}
-	
+
 	// Return success
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	
+
 	if err := json.NewEncoder(w).Encode(map[string]string{
-		"status":  "success",
-		"message": fmt.Sprintf("Backup %s marked as deleted", backupID),
-		"id":      backupID,
+		"status":   "success",
+		"message":  fmt.Sprintf("Backup %s marked as deleted", backupID),
+		"id":       backupID,
 		"database": backup.Database,
-		"type":    backup.BackupType,
+		"type":     backup.BackupType,
 	}); err != nil {
 		log.Printf("Error encoding response: %v", err)
 	}
@@ -361,7 +361,7 @@ func (s *Server) storageInfoHandler(w http.ResponseWriter, r *http.Request) {
 			"prefix":  config.CFG.S3.Prefix,
 		},
 	}
-	
+
 	// Get the active metadata store
 	metadataStore := metadata.GetActiveStore()
 	if metadataStore == nil {
@@ -369,11 +369,11 @@ func (s *Server) storageInfoHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Metadata store not available", http.StatusServiceUnavailable)
 		return
 	}
-	
+
 	// Add stats
 	stats := metadataStore.GetStats()
 	info["stats"] = stats
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(info); err != nil {
 		log.Printf("Error encoding storage info response: %v", err)
@@ -539,7 +539,7 @@ func (s *Server) downloadLocalBackupHandler(w http.ResponseWriter, r *http.Reque
 		http.Error(w, fmt.Sprintf("Backup with ID %s not found", backupID), http.StatusNotFound)
 		return
 	}
-	
+
 	// Check if local file path is available
 	if backup.LocalPath == "" {
 		http.Error(w, fmt.Sprintf("No local file available for backup %s", backupID), http.StatusNotFound)
@@ -561,7 +561,7 @@ func (s *Server) downloadLocalBackupHandler(w http.ResponseWriter, r *http.Reque
 
 	// Serve the file
 	http.ServeFile(w, r, backup.LocalPath)
-	
+
 	log.Printf("Served local backup download: %s", backup.LocalPath)
 }
 
@@ -588,7 +588,7 @@ func (s *Server) downloadS3BackupHandler(w http.ResponseWriter, r *http.Request)
 		http.Error(w, fmt.Sprintf("Backup with ID %s not found", backupID), http.StatusNotFound)
 		return
 	}
-	
+
 	// Check if S3 key is available
 	if backup.S3Key == "" {
 		http.Error(w, fmt.Sprintf("No S3 file available for backup %s", backupID), http.StatusNotFound)
@@ -625,25 +625,25 @@ func (s *Server) downloadS3BackupHandler(w http.ResponseWriter, r *http.Request)
 	// Otherwise return JSON with the URL and backup details
 	w.Header().Set("Content-Type", "application/json")
 	response := map[string]interface{}{
-		"status":        "success",
-		"message":       "S3 presigned URL generated successfully",
-		"id":            backupID,
-		"database":      backup.Database,
-		"type":          backup.BackupType,
-		"size":          backup.Size,
-		"created_at":    backup.CreatedAt,
-		"s3_bucket":     config.CFG.S3.Bucket,
-		"s3_key":        backup.S3Key,
-		"download_url":  presignedURL,
-		"expires_in":    "15 minutes",
-		"filename":      filename,
-		"content_type":  "application/gzip",
+		"status":       "success",
+		"message":      "S3 presigned URL generated successfully",
+		"id":           backupID,
+		"database":     backup.Database,
+		"type":         backup.BackupType,
+		"size":         backup.Size,
+		"created_at":   backup.CreatedAt,
+		"s3_bucket":    config.CFG.S3.Bucket,
+		"s3_key":       backup.S3Key,
+		"download_url": presignedURL,
+		"expires_in":   "15 minutes",
+		"filename":     filename,
+		"content_type": "application/gzip",
 	}
-	
+
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding S3 download response: %v", err)
 	}
-	
+
 	log.Printf("Generated presigned URL for S3 backup: %s", backupID)
 }
 
@@ -654,23 +654,23 @@ func (s *Server) runRetentionHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	// Check if scheduler is available
 	if s.scheduler == nil {
 		http.Error(w, "Scheduler not configured", http.StatusInternalServerError)
 		return
 	}
-	
+
 	// Check if a task is already running
 	if !triggerRetention(s) {
 		http.Error(w, "A task is already running", http.StatusConflict)
 		return
 	}
-	
+
 	// Return success
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	
+
 	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status":  "accepted",
 		"message": "Retention policy enforcement initiated",
@@ -686,15 +686,15 @@ func (s *Server) mysqlOptionsHandler(w http.ResponseWriter, r *http.Request) {
 		// Return current MySQL options configuration
 		response := map[string]interface{}{
 			"globalOptions": config.CFG.MySQLDumpOptions,
-			"success": true,
+			"success":       true,
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			log.Printf("Error encoding MySQL options response: %v", err)
 			http.Error(w, "Error generating response", http.StatusInternalServerError)
 		}
-		
+
 	case http.MethodPost:
 		// Update MySQL options configuration
 		var options database.MySQLDumpOptions
@@ -702,24 +702,24 @@ func (s *Server) mysqlOptionsHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
-		
+
 		// For now, just log the request as the configuration isn't properly integrated
 		log.Printf("MySQL options update requested: %+v", options)
-		
+
 		// TODO: Save options to configuration and persist
 		// This would require updating the config package to support saving
-		
+
 		response := map[string]interface{}{
 			"success": true,
 			"message": "MySQL options configuration is not yet fully implemented. Options logged for review.",
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			log.Printf("Error encoding response: %v", err)
 			http.Error(w, "Error generating response", http.StatusInternalServerError)
 		}
-		
+
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -737,38 +737,38 @@ func logRequestMiddleware(next http.Handler) http.Handler {
 func triggerBackup(s *Server, backupType string, servers []string, databases []string) bool {
 	taskLock.Lock()
 	defer taskLock.Unlock()
-	
+
 	if isTaskRunning {
 		return false
 	}
-	
+
 	isTaskRunning = true
-	
+
 	go func() {
 		defer func() {
 			taskLock.Lock()
 			isTaskRunning = false
 			taskLock.Unlock()
 		}()
-		
+
 		// Log backup information
 		if len(servers) > 0 {
 			log.Printf("Running manual backup of type %s for servers: %v", backupType, servers)
 		} else {
 			log.Printf("Running manual backup of type %s for all servers", backupType)
 		}
-		
+
 		if len(databases) > 0 {
 			log.Printf("Only backing up databases: %v", databases)
 		}
-		
+
 		// Run the backup with server and database filters
 		err := s.scheduler.RunOnce(backupType, servers, databases)
 		if err != nil {
 			log.Printf("Error running backup: %v", err)
 		}
 	}()
-	
+
 	return true
 }
 
@@ -776,23 +776,23 @@ func triggerBackup(s *Server, backupType string, servers []string, databases []s
 func triggerRetention(s *Server) bool {
 	taskLock.Lock()
 	defer taskLock.Unlock()
-	
+
 	if isTaskRunning {
 		return false
 	}
-	
+
 	isTaskRunning = true
-	
+
 	go func() {
 		defer func() {
 			taskLock.Lock()
 			isTaskRunning = false
 			taskLock.Unlock()
 		}()
-		
+
 		log.Println("Running manual retention policy enforcement")
 		s.scheduler.RunRetentionOnce()
 	}()
-	
+
 	return true
 }

@@ -18,16 +18,16 @@ import (
 type EnhancedBackupPageData struct {
 	BackupStatusPageData
 	// Pagination fields
-	IsPaginated    bool
-	CurrentPage    int
-	PageSize       int
-	TotalBackups   int64
-	TotalPages     int
-	ShowingStart   int
-	ShowingEnd     int
-	PageNumbers    []int
-	PrevPageQuery  template.URL
-	NextPageQuery  template.URL
+	IsPaginated   bool
+	CurrentPage   int
+	PageSize      int
+	TotalBackups  int64
+	TotalPages    int
+	ShowingStart  int
+	ShowingEnd    int
+	PageNumbers   []int
+	PrevPageQuery template.URL
+	NextPageQuery template.URL
 	// Sorting
 	SortBy    string
 	SortOrder string
@@ -446,7 +446,7 @@ window.addEventListener('DOMContentLoaded', function() {
 	if data.CurrentPage < 1 {
 		data.CurrentPage = 1
 	}
-	
+
 	data.PageSize, _ = strconv.Atoi(query.Get("pageSize"))
 	if data.PageSize < 1 {
 		data.PageSize = 50
@@ -456,7 +456,7 @@ window.addEventListener('DOMContentLoaded', function() {
 	if data.SortBy == "" {
 		data.SortBy = "created_at"
 	}
-	
+
 	data.SortOrder = query.Get("sortOrder")
 	if data.SortOrder == "" {
 		data.SortOrder = "desc"
@@ -501,14 +501,14 @@ window.addEventListener('DOMContentLoaded', function() {
 			data.Backups = result.Data
 			data.TotalBackups = result.Total
 			data.TotalPages = result.TotalPages
-			
+
 			// Calculate showing range
 			data.ShowingStart = (data.CurrentPage-1)*data.PageSize + 1
 			data.ShowingEnd = data.ShowingStart + len(data.Backups) - 1
-			
+
 			// Generate page numbers (show max 7 pages)
 			data.PageNumbers = generatePageNumbers(data.CurrentPage, data.TotalPages)
-			
+
 			// Generate query strings for pagination links
 			data.PrevPageQuery = generatePageQuery(query, data.CurrentPage-1)
 			data.NextPageQuery = generatePageQuery(query, data.CurrentPage+1)
@@ -553,7 +553,7 @@ window.addEventListener('DOMContentLoaded', function() {
 
 	// Execute template with enhanced function map
 	tmpl = tmpl.Funcs(funcMap)
-	
+
 	pageData := PageData{
 		Title:   "Backup Status",
 		Content: data,
@@ -578,41 +578,41 @@ func generatePageNumbers(current, total int) []int {
 	}
 
 	numbers := []int{}
-	
+
 	// Always show first page
 	numbers = append(numbers, 1)
-	
+
 	// Calculate range around current page
 	start := current - 2
 	if start < 2 {
 		start = 2
 	}
-	
+
 	end := current + 2
 	if end > total-1 {
 		end = total - 1
 	}
-	
+
 	// Add ellipsis if needed
 	if start > 2 {
 		numbers = append(numbers, -1) // -1 represents ellipsis
 	}
-	
+
 	// Add middle pages
 	for i := start; i <= end; i++ {
 		numbers = append(numbers, i)
 	}
-	
+
 	// Add ellipsis if needed
 	if end < total-1 {
 		numbers = append(numbers, -1) // -1 represents ellipsis
 	}
-	
+
 	// Always show last page
 	if total > 1 {
 		numbers = append(numbers, total)
 	}
-	
+
 	return numbers
 }
 
@@ -624,7 +624,7 @@ func generatePageQuery(query map[string][]string, page int) template.URL {
 		}
 	}
 	q["page"] = []string{strconv.Itoa(page)}
-	
+
 	params := ""
 	for k, values := range q {
 		for _, v := range values {
@@ -634,7 +634,7 @@ func generatePageQuery(query map[string][]string, page int) template.URL {
 			params += fmt.Sprintf("%s=%s", k, v)
 		}
 	}
-	
+
 	return template.URL(params)
 }
 
@@ -645,16 +645,16 @@ func generateSortQuery(query map[string][]string, field, currentSort, currentOrd
 			q[k] = v
 		}
 	}
-	
+
 	q["sortBy"] = []string{field}
-	
+
 	// Toggle order if clicking the same field
 	if field == currentSort && currentOrder == "desc" {
 		q["sortOrder"] = []string{"asc"}
 	} else {
 		q["sortOrder"] = []string{"desc"}
 	}
-	
+
 	params := ""
 	for k, values := range q {
 		for _, v := range values {
@@ -664,7 +664,7 @@ func generateSortQuery(query map[string][]string, field, currentSort, currentOrd
 			params += fmt.Sprintf("%s=%s", k, v)
 		}
 	}
-	
+
 	return template.URL(params)
 }
 
@@ -736,7 +736,7 @@ func contains(s, substr string) bool {
 func getRecentErrors(limit int) []types.BackupMeta {
 	var errors []types.BackupMeta
 	backups := metadata.DefaultStore.GetBackups()
-	
+
 	for _, b := range backups {
 		if b.Status == types.StatusError {
 			errors = append(errors, b)
@@ -745,42 +745,42 @@ func getRecentErrors(limit int) []types.BackupMeta {
 			}
 		}
 	}
-	
+
 	return errors
 }
 
 func getUniqueDatabases() []string {
 	databaseMap := make(map[string]bool)
 	backups := metadata.DefaultStore.GetBackups()
-	
+
 	for _, b := range backups {
 		if b.Database != "" {
 			databaseMap[b.Database] = true
 		}
 	}
-	
+
 	databases := make([]string, 0, len(databaseMap))
 	for db := range databaseMap {
 		databases = append(databases, db)
 	}
-	
+
 	return databases
 }
 
 func getUniqueServers() []string {
 	serverMap := make(map[string]bool)
 	backups := metadata.DefaultStore.GetBackups()
-	
+
 	for _, b := range backups {
 		if b.ServerName != "" {
 			serverMap[b.ServerName] = true
 		}
 	}
-	
+
 	servers := make([]string, 0, len(serverMap))
 	for server := range serverMap {
 		servers = append(servers, server)
 	}
-	
+
 	return servers
 }

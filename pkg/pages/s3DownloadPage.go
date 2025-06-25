@@ -15,18 +15,18 @@ import (
 
 // S3DownloadPageData holds data for the S3 download info page
 type S3DownloadPageData struct {
-	BackupID      string
-	BackupInfo    types.BackupMeta
-	PresignedURL  string
-	ExpiresIn     string
-	Filename      string
-	CurlCommand   string
-	WgetCommand   string
-	S3Bucket      string
-	S3Key         string
-	GeneratedAt   time.Time
-	LocalEnabled  bool
-	S3Enabled     bool
+	BackupID     string
+	BackupInfo   types.BackupMeta
+	PresignedURL string
+	ExpiresIn    string
+	Filename     string
+	CurlCommand  string
+	WgetCommand  string
+	S3Bucket     string
+	S3Key        string
+	GeneratedAt  time.Time
+	LocalEnabled bool
+	S3Enabled    bool
 }
 
 // S3DownloadPage renders the S3 download info page
@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	var err error
 	tmpl, err = tmpl.Parse(contentTemplate)
 	if err != nil {
-		http.Error(w, "Template parsing error: " + err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Template parsing error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		http.Error(w, fmt.Sprintf("Backup with ID %s not found", backupID), http.StatusNotFound)
 		return
 	}
-	
+
 	// Check if S3 key is available
 	if backup.S3Key == "" {
 		http.Error(w, fmt.Sprintf("No S3 file available for backup %s", backupID), http.StatusNotFound)
@@ -234,7 +234,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	// Create curl command with URL escaping
 	data.CurlCommand = fmt.Sprintf("curl -o %s '%s'", filename, presignedURL)
-	
+
 	// Create wget command with URL escaping
 	data.WgetCommand = fmt.Sprintf("wget -O %s '%s'", filename, presignedURL)
 

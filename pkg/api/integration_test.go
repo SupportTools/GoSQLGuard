@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package api
@@ -26,12 +27,12 @@ func TestAPIIntegration_CompleteWorkflow(t *testing.T) {
 		DatabaseServers: []config.DatabaseServerConfig{},
 		BackupTypes:     map[string]config.BackupTypeConfig{},
 	}
-	
+
 	// Initialize handlers
 	s3Handler := NewS3ConfigHandler(cfg, nil)
 	mysqlOptionsHandler := NewMySQLOptionsHandler(cfg, nil)
 	postgresqlOptionsHandler := NewPostgreSQLOptionsHandler(cfg, nil)
-	
+
 	// Step 1: Configure S3 storage
 	t.Run("Configure S3 Storage", func(t *testing.T) {
 		s3Config := S3ConfigRequest{
@@ -45,24 +46,24 @@ func TestAPIIntegration_CompleteWorkflow(t *testing.T) {
 			UseSSL:          true,
 			InsecureSSL:     false,
 		}
-		
+
 		body, _ := json.Marshal(s3Config)
 		req := httptest.NewRequest("PUT", "/api/s3", bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
-		
+
 		s3Handler.handleS3Config(rr, req)
-		
+
 		if rr.Code != http.StatusOK {
 			t.Errorf("Failed to configure S3: %v", rr.Body.String())
 		}
-		
+
 		// Verify configuration was saved
 		if cfg.S3.Bucket != "my-backup-bucket" {
 			t.Errorf("S3 bucket not configured correctly")
 		}
 	})
-	
+
 	// Step 2: Configure global MySQL options
 	t.Run("Configure Global MySQL Options", func(t *testing.T) {
 		mysqlOptions := MySQLOptionsRequest{
@@ -77,19 +78,19 @@ func TestAPIIntegration_CompleteWorkflow(t *testing.T) {
 				Events:            true,
 			},
 		}
-		
+
 		body, _ := json.Marshal(mysqlOptions)
 		req := httptest.NewRequest("PUT", "/api/mysql-options", bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
-		
+
 		mysqlOptionsHandler.handleMySQLOptions(rr, req)
-		
+
 		if rr.Code != http.StatusOK {
 			t.Errorf("Failed to configure MySQL options: %v", rr.Body.String())
 		}
 	})
-	
+
 	// Step 3: Configure global PostgreSQL options
 	t.Run("Configure Global PostgreSQL Options", func(t *testing.T) {
 		pgOptions := PostgreSQLOptionsRequest{
@@ -102,19 +103,19 @@ func TestAPIIntegration_CompleteWorkflow(t *testing.T) {
 				Compress:     6,
 			},
 		}
-		
+
 		body, _ := json.Marshal(pgOptions)
 		req := httptest.NewRequest("PUT", "/api/postgresql-options", bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
-		
+
 		postgresqlOptionsHandler.handlePostgreSQLOptions(rr, req)
-		
+
 		if rr.Code != http.StatusOK {
 			t.Errorf("Failed to configure PostgreSQL options: %v", rr.Body.String())
 		}
 	})
-	
+
 	// Step 4: Test S3 connection (this would fail with fake credentials)
 	t.Run("Test S3 Connection", func(t *testing.T) {
 		testReq := S3TestRequest{
@@ -124,19 +125,19 @@ func TestAPIIntegration_CompleteWorkflow(t *testing.T) {
 			SecretAccessKey: "test-secret",
 			UseSSL:          true,
 		}
-		
+
 		body, _ := json.Marshal(testReq)
 		req := httptest.NewRequest("POST", "/api/s3/test", bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
-		
+
 		s3Handler.handleS3Test(rr, req)
-		
+
 		// We expect this to succeed (returns 200) but with an error message
 		if rr.Code != http.StatusOK {
 			t.Errorf("S3 test endpoint returned unexpected status: %v", rr.Code)
 		}
-		
+
 		var response S3Response
 		json.Unmarshal(rr.Body.Bytes(), &response)
 		// In real scenario, this would fail due to invalid credentials
@@ -147,7 +148,7 @@ func TestAPIIntegration_CompleteWorkflow(t *testing.T) {
 // Example of how to test server connection endpoints
 func ExampleServerConnectionTest() {
 	handler := &ServerHandler{}
-	
+
 	// Test MySQL connection
 	mysqlServer := serverRequest{
 		Type:     "mysql",
@@ -156,17 +157,17 @@ func ExampleServerConnectionTest() {
 		Username: "root",
 		Password: "password",
 	}
-	
+
 	body, _ := json.Marshal(mysqlServer)
 	req := httptest.NewRequest("POST", "/api/servers/test", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	
+
 	handler.handleTestConnection(rr, req)
-	
+
 	var response map[string]interface{}
 	json.Unmarshal(rr.Body.Bytes(), &response)
-	
+
 	if response["status"] == "success" {
 		fmt.Printf("Connected successfully! Found databases: %v\n", response["databases"])
 	} else {
@@ -187,30 +188,30 @@ func ExamplePerServerMySQLOptions() {
 			Enabled: false,
 		},
 	}
-	
+
 	handler := NewMySQLOptionsHandler(cfg, nil)
-	
+
 	// Configure specific options for production server
 	options := database.MySQLDumpOptions{
-		SingleTransaction:  true,
-		Quick:              true,
-		SkipLockTables:     true,
-		ExtendedInsert:     false, // Disable for better readability
-		Compress:           true,
-		Triggers:           true,
-		Routines:           true,
-		Events:             true,
-		CustomOptions:      []string{"--hex-blob", "--skip-tz-utc"},
+		SingleTransaction: true,
+		Quick:             true,
+		SkipLockTables:    true,
+		ExtendedInsert:    false, // Disable for better readability
+		Compress:          true,
+		Triggers:          true,
+		Routines:          true,
+		Events:            true,
+		CustomOptions:     []string{"--hex-blob", "--skip-tz-utc"},
 	}
-	
+
 	body, _ := json.Marshal(options)
-	req := httptest.NewRequest("PUT", "/api/mysql-options/server?server=production-mysql", 
+	req := httptest.NewRequest("PUT", "/api/mysql-options/server?server=production-mysql",
 		bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	
+
 	handler.handleServerMySQLOptions(rr, req)
-	
+
 	if rr.Code == http.StatusOK {
 		fmt.Println("MySQL options configured for production-mysql server")
 	}

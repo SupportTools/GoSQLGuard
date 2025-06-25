@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/supporttools/GoSQLGuard/pkg/config"
-	"github.com/supporttools/GoSQLGuard/pkg/metadata/types"
 	dbmeta "github.com/supporttools/GoSQLGuard/pkg/database/metadata"
+	"github.com/supporttools/GoSQLGuard/pkg/metadata/types"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -22,21 +22,21 @@ var DB *gorm.DB
 
 // DatabaseBackup represents a database backup record in MySQL
 type DatabaseBackup struct {
-	ID              string     `gorm:"primaryKey;type:varchar(255)"`
-	ServerName      string     `gorm:"type:varchar(255);not null;index"`
-	ServerType      string     `gorm:"type:varchar(50);not null"`
-	DatabaseName    string     `gorm:"column:database_name;type:varchar(255);not null;index"`
-	BackupType      string     `gorm:"type:varchar(50);not null;index"`
-	CreatedAt       time.Time  `gorm:"not null"`
-	CompletedAt     *time.Time
-	Size            int64
-	Status          string     `gorm:"type:varchar(50);not null;index"`
-	ErrorMessage    string     `gorm:"type:text"`
-	RetentionPolicy string     `gorm:"type:varchar(255)"`
-	ExpiresAt       *time.Time
-	LogFilePath     string     `gorm:"type:varchar(1024)"`
-	S3UploadStatus  string     `gorm:"type:varchar(50)"`
-	S3UploadError   string     `gorm:"type:text"`
+	ID               string    `gorm:"primaryKey;type:varchar(255)"`
+	ServerName       string    `gorm:"type:varchar(255);not null;index"`
+	ServerType       string    `gorm:"type:varchar(50);not null"`
+	DatabaseName     string    `gorm:"column:database_name;type:varchar(255);not null;index"`
+	BackupType       string    `gorm:"type:varchar(50);not null;index"`
+	CreatedAt        time.Time `gorm:"not null"`
+	CompletedAt      *time.Time
+	Size             int64
+	Status           string `gorm:"type:varchar(50);not null;index"`
+	ErrorMessage     string `gorm:"type:text"`
+	RetentionPolicy  string `gorm:"type:varchar(255)"`
+	ExpiresAt        *time.Time
+	LogFilePath      string `gorm:"type:varchar(1024)"`
+	S3UploadStatus   string `gorm:"type:varchar(50)"`
+	S3UploadError    string `gorm:"type:text"`
 	S3UploadComplete *time.Time
 
 	// Relationships
@@ -73,8 +73,8 @@ func (DatabaseS3Key) TableName() string {
 	return "s3_keys"
 }
 
-// MetadataDBStats represents global metadata statistics
-type MetadataDBStats struct {
+// DBStats represents global metadata statistics stored in database
+type DBStats struct {
 	ID             uint      `gorm:"primaryKey;autoIncrement:false;default:1"`
 	TotalLocalSize int64     `gorm:"not null;default:0"`
 	TotalS3Size    int64     `gorm:"not null;default:0"`
@@ -82,18 +82,18 @@ type MetadataDBStats struct {
 	Version        string    `gorm:"type:varchar(50);not null"`
 }
 
-// TableName specifies the table name for the MetadataDBStats model
-func (MetadataDBStats) TableName() string {
+// TableName specifies the table name for the DBStats model
+func (DBStats) TableName() string {
 	return "metadata_stats"
 }
 
 // DBStore implements metadata storage using MySQL
 type DBStore struct {
-	db           *gorm.DB
-	mutex        sync.RWMutex
-	filepath     string // For backward compatibility
-	s3Key        string // For backward compatibility
-	initialized  bool
+	db          *gorm.DB
+	mutex       sync.RWMutex
+	filepath    string // For backward compatibility
+	s3Key       string // For backward compatibility
+	initialized bool
 }
 
 // InitializeMetadataDatabase initializes the metadata database
@@ -194,7 +194,7 @@ func connect() (*gorm.DB, error) {
 	if cfg.ConnMaxLifetime != "" {
 		duration, err := time.ParseDuration(cfg.ConnMaxLifetime)
 		if err != nil {
-			log.Printf("Warning: Invalid connection max lifetime '%s', using default 5m: %v", 
+			log.Printf("Warning: Invalid connection max lifetime '%s', using default 5m: %v",
 				cfg.ConnMaxLifetime, err)
 			duration = 5 * time.Minute
 		}
@@ -212,12 +212,12 @@ func runMigrations(db *gorm.DB) error {
 		&DatabaseBackup{},
 		&DatabaseLocalPath{},
 		&DatabaseS3Key{},
-		&MetadataDBStats{},
+		&DBStats{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to migrate tables: %w", err)
 	}
-	
+
 	// Also run migrations for server and schedule management tables
 	// Import them from the database/metadata package
 	if err := runServerMigrations(db); err != nil {
@@ -226,10 +226,10 @@ func runMigrations(db *gorm.DB) error {
 
 	// Initialize stats record if it doesn't exist
 	var count int64
-	db.Model(&MetadataDBStats{}).Count(&count)
+	db.Model(&DBStats{}).Count(&count)
 	if count == 0 {
 		log.Println("Initializing metadata stats record")
-		stats := MetadataDBStats{
+		stats := DBStats{
 			ID:          1,
 			Version:     "1.0",
 			LastUpdated: time.Now(),
@@ -252,7 +252,7 @@ func migrateFromFile(dbStore *DBStore) error {
 
 	// Create a temporary file store
 	fileStore := &Store{
-		metadata: MetadataStore{
+		metadata: Data{
 			Backups:     make([]types.BackupMeta, 0),
 			LastUpdated: time.Now(),
 			Version:     "1.0",
@@ -379,7 +379,7 @@ func migrateFromFile(dbStore *DBStore) error {
 	}
 
 	// Update stats
-	err = tx.Model(&MetadataDBStats{}).Where("id = ?", 1).Updates(map[string]interface{}{
+	err = tx.Model(&DBStats{}).Where("id = ?", 1).Updates(map[string]interface{}{
 		"total_local_size": totalLocalSize,
 		"total_s3_size":    totalS3Size,
 		"last_updated":     time.Now(),
@@ -417,8 +417,8 @@ func (s *DBStore) CreateBackupMeta(serverName, serverType, database, backupType 
 			duration, err := time.ParseDuration(typeConfig.Local.Retention.Duration)
 			if err == nil {
 				expiresAt = time.Now().Add(duration)
-				retentionText = fmt.Sprintf("Keep for %s (until %s)", 
-					typeConfig.Local.Retention.Duration, 
+				retentionText = fmt.Sprintf("Keep for %s (until %s)",
+					typeConfig.Local.Retention.Duration,
 					expiresAt.Format("2006-01-02 15:04:05"))
 			} else {
 				retentionText = "Unknown retention policy"
@@ -598,7 +598,7 @@ func (s *DBStore) updateStats(tx *gorm.DB) error {
 	}
 
 	// Update stats
-	return tx.Model(&MetadataDBStats{}).Where("id = ?", 1).Updates(map[string]interface{}{
+	return tx.Model(&DBStats{}).Where("id = ?", 1).Updates(map[string]interface{}{
 		"total_local_size": totalLocalSize,
 		"total_s3_size":    totalS3Size,
 		"last_updated":     time.Now(),
@@ -697,7 +697,7 @@ func (s *DBStore) GetStats() map[string]interface{} {
 	defer s.mutex.RUnlock()
 
 	// Get the stats record
-	var stats MetadataDBStats
+	var stats DBStats
 	if err := s.db.First(&stats, 1).Error; err != nil {
 		log.Printf("Error retrieving metadata stats from database: %v", err)
 		return createEmptyStats()
@@ -895,7 +895,7 @@ func (s *DBStore) Save() error {
 // convertToBackupMetas converts database model backups to the original format
 func convertToBackupMetas(dbBackups []DatabaseBackup) []types.BackupMeta {
 	result := make([]types.BackupMeta, 0, len(dbBackups))
-	
+
 	for _, db := range dbBackups {
 		// Create basic backup meta
 		backup := types.BackupMeta{
@@ -915,30 +915,30 @@ func convertToBackupMetas(dbBackups []DatabaseBackup) []types.BackupMeta {
 			LocalPaths:      make(map[string]string),
 			S3Keys:          make(map[string]string),
 		}
-		
+
 		// Handle optional time fields
 		if db.CompletedAt != nil {
 			backup.CompletedAt = *db.CompletedAt
 		}
-		
+
 		if db.ExpiresAt != nil {
 			backup.ExpiresAt = *db.ExpiresAt
 		}
-		
+
 		if db.S3UploadComplete != nil {
 			backup.S3UploadComplete = *db.S3UploadComplete
 		}
-		
+
 		// Add local paths
 		for _, path := range db.LocalPaths {
 			backup.LocalPaths[path.Organization] = path.Path
 		}
-		
+
 		// Add S3 keys
 		for _, key := range db.S3Keys {
 			backup.S3Keys[key.Organization] = key.Key
 		}
-		
+
 		// Set legacy fields for backward compatibility
 		if len(backup.LocalPaths) > 0 {
 			if byServer, ok := backup.LocalPaths["by-server"]; ok {
@@ -951,7 +951,7 @@ func convertToBackupMetas(dbBackups []DatabaseBackup) []types.BackupMeta {
 				}
 			}
 		}
-		
+
 		if len(backup.S3Keys) > 0 {
 			if byServer, ok := backup.S3Keys["by-server"]; ok {
 				backup.S3Key = byServer
@@ -963,10 +963,10 @@ func convertToBackupMetas(dbBackups []DatabaseBackup) []types.BackupMeta {
 				}
 			}
 		}
-		
+
 		result = append(result, backup)
 	}
-	
+
 	return result
 }
 

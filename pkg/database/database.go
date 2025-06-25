@@ -24,7 +24,7 @@ var providers map[string]Provider
 // Initialize sets up all configured database providers
 func Initialize() error {
 	providers = make(map[string]Provider)
-	
+
 	// Initialize MySQL provider if enabled
 	if config.CFG.MySQL.Host != "" && config.CFG.MySQL.Username != "" {
 		// Create MySQL provider factory
@@ -37,14 +37,14 @@ func Initialize() error {
 			if portInt == 0 {
 				portInt = 3306 // Default MySQL port
 			}
-			
+
 			// Create and configure MySQL provider
 			mysqlFactory, ok := factory.(common.ProviderFactory)
 			if !ok {
 				return fmt.Errorf("invalid MySQL provider factory type")
 			}
-			
-			// Update factory fields 
+
+			// Update factory fields
 			// This requires type asserting to the specific factory type
 			mysqlFactoryImpl, ok := mysqlFactory.(*mysql.Factory)
 			if ok {
@@ -55,18 +55,18 @@ func Initialize() error {
 				mysqlFactoryImpl.IncludeDatabases = config.CFG.MySQL.IncludeDatabases
 				mysqlFactoryImpl.ExcludeDatabases = config.CFG.MySQL.ExcludeDatabases
 			}
-			
+
 			// Create provider instance
 			provider, err := mysqlFactory.Create()
 			if err != nil {
 				return fmt.Errorf("failed to create MySQL provider: %w", err)
 			}
-			
+
 			providers["mysql"] = provider
 			log.Println("MySQL provider initialized with include/exclude database filtering")
 		}
 	}
-	
+
 	// Initialize PostgreSQL provider if enabled
 	if len(config.CFG.PostgreSQL.Databases) > 0 {
 		// Create PostgreSQL provider factory
@@ -79,13 +79,13 @@ func Initialize() error {
 			if portInt == 0 {
 				portInt = 5432 // Default PostgreSQL port
 			}
-			
+
 			// Create and configure PostgreSQL provider
 			postgresFactory, ok := factory.(common.ProviderFactory)
 			if !ok {
 				return fmt.Errorf("invalid PostgreSQL provider factory type")
 			}
-			
+
 			// Update factory fields
 			// This requires type asserting to the specific factory type
 			postgresFactoryImpl, ok := postgresFactory.(*postgresql.Factory)
@@ -96,23 +96,23 @@ func Initialize() error {
 				postgresFactoryImpl.Password = config.CFG.PostgreSQL.Password
 				postgresFactoryImpl.Databases = config.CFG.PostgreSQL.Databases
 			}
-			
+
 			// Create provider instance
 			provider, err := postgresFactory.Create()
 			if err != nil {
 				return fmt.Errorf("failed to create PostgreSQL provider: %w", err)
 			}
-			
+
 			providers["postgresql"] = provider
 			log.Printf("PostgreSQL provider initialized with %d databases", len(config.CFG.PostgreSQL.Databases))
 		}
 	}
-	
+
 	// Validate that we have at least one provider
 	if len(providers) == 0 {
 		return fmt.Errorf("no database providers were initialized")
 	}
-	
+
 	return nil
 }
 

@@ -41,7 +41,7 @@ func (h *BackupsHandler) handleBackups(w http.ResponseWriter, r *http.Request) {
 
 	// Parse query parameters
 	query := r.URL.Query()
-	
+
 	opts := metadata.QueryOptions{
 		// Filtering
 		ServerName:   query.Get("server"),
@@ -50,15 +50,15 @@ func (h *BackupsHandler) handleBackups(w http.ResponseWriter, r *http.Request) {
 		Status:       query.Get("status"),
 		SearchTerm:   query.Get("search"),
 		ActiveOnly:   query.Get("activeOnly") == "true",
-		
+
 		// Pagination
 		Page:     parseInt(query.Get("page"), 1),
 		PageSize: parseInt(query.Get("pageSize"), 50),
-		
+
 		// Sorting
 		SortBy:    query.Get("sortBy"),
 		SortOrder: query.Get("sortOrder"),
-		
+
 		// Performance
 		PreloadPaths: query.Get("includePaths") == "true",
 	}
@@ -69,7 +69,7 @@ func (h *BackupsHandler) handleBackups(w http.ResponseWriter, r *http.Request) {
 			opts.StartDate = &t
 		}
 	}
-	
+
 	if endDate := query.Get("endDate"); endDate != "" {
 		if t, err := time.Parse("2006-01-02", endDate); err == nil {
 			opts.EndDate = &t
@@ -91,7 +91,7 @@ func (h *BackupsHandler) handleBackups(w http.ResponseWriter, r *http.Request) {
 // handleBackupsLegacy handles non-paginated backup queries for file-based store
 func (h *BackupsHandler) handleBackupsLegacy(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	
+
 	// Get filter parameters
 	serverName := query.Get("server")
 	database := query.Get("database")
@@ -108,7 +108,7 @@ func (h *BackupsHandler) handleBackupsLegacy(w http.ResponseWriter, r *http.Requ
 
 	// Apply additional filters if needed
 	filteredBackups := backups
-	
+
 	// Date range filter
 	if startDate := query.Get("startDate"); startDate != "" {
 		if t, err := time.Parse("2006-01-02", startDate); err == nil {
@@ -121,7 +121,7 @@ func (h *BackupsHandler) handleBackupsLegacy(w http.ResponseWriter, r *http.Requ
 			filteredBackups = filtered
 		}
 	}
-	
+
 	if endDate := query.Get("endDate"); endDate != "" {
 		if t, err := time.Parse("2006-01-02", endDate); err == nil {
 			// Add 1 day to include the entire end date
@@ -209,10 +209,10 @@ func parseInt(s string, defaultValue int) int {
 }
 
 func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && 
+	return len(s) > 0 && len(substr) > 0 &&
 		(s == substr || (len(s) >= len(substr) && s[:len(substr)] == substr) ||
-		 (len(s) >= len(substr) && s[len(s)-len(substr):] == substr) ||
-		 (len(s) > len(substr) && findSubstring(s, substr)))
+			(len(s) >= len(substr) && s[len(s)-len(substr):] == substr) ||
+			(len(s) > len(substr) && findSubstring(s, substr)))
 }
 
 func findSubstring(s, substr string) bool {
