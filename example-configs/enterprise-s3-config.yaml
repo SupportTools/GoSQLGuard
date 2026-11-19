@@ -58,8 +58,8 @@ s3:
   pathStyle: true  # Use path-style S3 requests
   useSSL: true
   # Optional: Custom CA certificate for internal S3 service
-  customCAPath: "/etc/ssl/certs/internal-ca.crt"
-  skipCertValidation: false
+  caBundlePath: "/etc/ssl/certs/internal-ca.crt"
+  insecureSkipVerify: false
   organizationStrategy: "combined"
 
 # Backup types configuration

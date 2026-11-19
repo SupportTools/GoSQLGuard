@@ -95,7 +95,7 @@ s3:
   secretKey: "YOUR_SECRET_KEY"
   prefix: "mysql-backups"
   useSSL: true
-  skipCertValidation: false
+  insecureSkipVerify: false
   organizationStrategy: "combined"  # combined, server-only, or type-only
 
 # Backup types configuration

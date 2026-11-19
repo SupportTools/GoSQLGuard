@@ -188,6 +188,19 @@ backupTypes:
 - `secretKey`: S3 secret key (can use environment variable syntax)
 - `prefix`: Prefix for S3 objects (useful for organizing backups)
 - `useSSL`: Whether to use SSL for S3 connections
+- `caBundlePath` (`S3_CA_BUNDLE_PATH`): PEM CA bundle trusted in addition to the system roots when verifying the S3 endpoint. Use this for MinIO, TrueNAS or any endpoint signed by a private CA.
+- `insecureSkipVerify` (`S3_INSECURE_SKIP_VERIFY`, default `false`): disables TLS certificate verification. Lab use only; prefer `caBundlePath`.
+
+##### S3 TLS verification
+
+GoSQLGuard verifies the S3 endpoint's TLS certificate by default, against the system roots plus `caBundlePath` if set. A self-signed or private-CA endpoint therefore fails with `x509: certificate signed by unknown authority` until you either point `caBundlePath` at its CA (recommended) or set `insecureSkipVerify: true` explicitly. The older names `customCAPath` / `S3_CUSTOM_CA_PATH` and `skipCertValidation` / `S3_SKIP_CERT_VALIDATION` still work as deprecated aliases and log a warning.
+
+```yaml
+s3:
+  endpoint: "https://minio.internal:9000"
+  caBundlePath: "/etc/gosqlguard/s3-ca.pem"   # mounted from a ConfigMap or Secret
+  insecureSkipVerify: false
+```
 
 #### Metadata Database Settings
 - `enabled`: Enable/disable MySQL metadata database storage

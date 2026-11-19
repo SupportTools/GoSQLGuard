@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -618,7 +619,7 @@ func (s *Server) downloadS3BackupHandler(w http.ResponseWriter, r *http.Request)
 	if r.URL.Query().Get("redirect") == "true" {
 		// Redirect directly to the presigned URL
 		http.Redirect(w, r, presignedURL, http.StatusFound)
-		log.Printf("Redirected to S3 presigned URL for backup: %s", backupID)
+		log.Printf("Redirected to S3 presigned URL for backup: %s", strconv.Quote(backupID))
 		return
 	}
 
@@ -644,7 +645,7 @@ func (s *Server) downloadS3BackupHandler(w http.ResponseWriter, r *http.Request)
 		log.Printf("Error encoding S3 download response: %v", err)
 	}
 
-	log.Printf("Generated presigned URL for S3 backup: %s", backupID)
+	log.Printf("Generated presigned URL for S3 backup: %s", strconv.Quote(backupID))
 }
 
 // runRetentionHandler triggers retention policy enforcement
@@ -725,10 +726,11 @@ func (s *Server) mysqlOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// logRequestMiddleware logs HTTP requests
+// logRequestMiddleware logs HTTP requests. Request-derived values are
+// strconv.Quote-d so CR/LF cannot forge log lines (CWE-117).
 func logRequestMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("HTTP %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+		log.Printf("HTTP %s %s from %s", strconv.Quote(r.Method), strconv.Quote(r.URL.Path), strconv.Quote(r.RemoteAddr))
 		next.ServeHTTP(w, r)
 	})
 }
@@ -753,13 +755,13 @@ func triggerBackup(s *Server, backupType string, servers []string, databases []s
 
 		// Log backup information
 		if len(servers) > 0 {
-			log.Printf("Running manual backup of type %s for servers: %v", backupType, servers)
+			log.Printf("Running manual backup of type %s for servers: %s", strconv.Quote(backupType), strconv.Quote(strings.Join(servers, ",")))
 		} else {
-			log.Printf("Running manual backup of type %s for all servers", backupType)
+			log.Printf("Running manual backup of type %s for all servers", strconv.Quote(backupType))
 		}
 
 		if len(databases) > 0 {
-			log.Printf("Only backing up databases: %v", databases)
+			log.Printf("Only backing up databases: %s", strconv.Quote(strings.Join(databases, ",")))
 		}
 
 		// Run the backup with server and database filters
