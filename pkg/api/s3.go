@@ -1,7 +1,6 @@
 package api
 
 import (
-	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -92,7 +91,8 @@ func (h *S3ConfigHandler) getS3Config(w http.ResponseWriter, r *http.Request) {
 			"endpoint":             h.Config.S3.Endpoint,
 			"access_key_id":        h.Config.S3.AccessKey,
 			"use_ssl":              h.Config.S3.UseSSL,
-			"skip_cert_validation": h.Config.S3.SkipCertValidation,
+			"skip_cert_validation": h.Config.S3.EffectiveInsecureSkipVerify(),
+			"ca_bundle_path":       h.Config.S3.EffectiveCABundlePath(),
 		},
 	}
 
@@ -117,7 +117,8 @@ func (h *S3ConfigHandler) updateS3Config(w http.ResponseWriter, r *http.Request)
 		h.Config.S3.SecretKey = req.SecretAccessKey
 	}
 	h.Config.S3.UseSSL = req.UseSSL
-	h.Config.S3.SkipCertValidation = req.InsecureSSL
+	h.Config.S3.InsecureSkipVerify = req.InsecureSSL
+	h.Config.S3.SkipCertValidation = false
 
 	// Save configuration if using MySQL config
 	if os.Getenv("CONFIG_SOURCE") == "mysql" {
@@ -157,10 +158,6 @@ func (h *S3ConfigHandler) handleS3Test(w http.ResponseWriter, r *http.Request) {
 	log.Printf("S3 test request decoded - Region=%s, Bucket=%s, Endpoint=%s, AccessKeyID=%s (length=%d), SecretAccessKey=****** (length=%d), UseSSL=%v",
 		req.Region, req.Bucket, req.Endpoint, req.AccessKeyID, len(req.AccessKeyID), len(req.SecretAccessKey), req.UseSSL)
 
-	// Debug: print the raw JSON
-	rawJSON, _ := json.Marshal(req)
-	log.Printf("S3 test request struct as JSON: %s", string(rawJSON))
-
 	// Test S3 connection
 	if err := h.testS3Connection(req); err != nil {
 		h.sendError(w, fmt.Sprintf("S3 connection test failed: %v", err), http.StatusOK)
@@ -193,20 +190,21 @@ func (h *S3ConfigHandler) testS3Connection(req S3TestRequest) error {
 
 		// For HTTPS endpoints, we might need a custom HTTP client
 		if req.UseSSL {
-			// Create a custom HTTP client with TLS configuration
-			tr := &http.Transport{
-				TLSClientConfig: &tls.Config{
-					MinVersion:         tls.VersionTLS12,
-					InsecureSkipVerify: req.InsecureSSL, // #nosec G402 - Only skip if explicitly requested by user
-				},
+			// Verify TLS by default. The configured CA bundle applies; verification
+			// is skipped only when the request explicitly sets insecure_ssl.
+			tlsSettings := config.S3Config{InsecureSkipVerify: req.InsecureSSL}
+			if h.Config != nil {
+				tlsSettings.CABundlePath = h.Config.S3.EffectiveCABundlePath()
 			}
-			httpClient := &http.Client{
+			tlsConfig, err := tlsSettings.TLSConfig()
+			if err != nil {
+				return err
+			}
+			tr := http.DefaultTransport.(*http.Transport).Clone()
+			tr.TLSClientConfig = tlsConfig
+			awsConfig.HTTPClient = &http.Client{
 				Transport: tr,
 				Timeout:   30 * time.Second,
-			}
-			awsConfig.HTTPClient = httpClient
-			if req.InsecureSSL {
-				log.Printf("WARNING: Using InsecureSkipVerify=true for endpoint: %s", req.Endpoint)
 			}
 		}
 	}
@@ -278,7 +276,7 @@ func (h *S3ConfigHandler) saveS3ConfigToMySQL() error {
 		"access_key":           h.Config.S3.AccessKey,
 		"secret_key":           h.Config.S3.SecretKey,
 		"use_ssl":              h.Config.S3.UseSSL,
-		"skip_cert_validation": h.Config.S3.SkipCertValidation,
+		"skip_cert_validation": h.Config.S3.EffectiveInsecureSkipVerify(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to marshal S3 config: %w", err)

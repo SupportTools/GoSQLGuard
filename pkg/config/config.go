@@ -90,17 +90,25 @@ type LocalConfig struct {
 
 // S3Config defines S3 storage settings
 type S3Config struct {
-	Enabled              bool   `yaml:"enabled"`
-	Bucket               string `yaml:"bucket"`
-	Region               string `yaml:"region"`
-	Endpoint             string `yaml:"endpoint"`
-	AccessKey            string `yaml:"accessKey"`
-	SecretKey            string `yaml:"secretKey"`
-	Prefix               string `yaml:"prefix"`
-	PathStyle            bool   `yaml:"pathStyle"` // Use path-style access for S3
-	UseSSL               bool   `yaml:"useSSL"`
-	CustomCAPath         string `yaml:"customCAPath"`         // Path to custom CA certificate
-	SkipCertValidation   bool   `yaml:"skipCertValidation"`   // Skip certificate validation
+	Enabled   bool   `yaml:"enabled"`
+	Bucket    string `yaml:"bucket"`
+	Region    string `yaml:"region"`
+	Endpoint  string `yaml:"endpoint"`
+	AccessKey string `yaml:"accessKey"`
+	SecretKey string `yaml:"secretKey"`
+	Prefix    string `yaml:"prefix"`
+	PathStyle bool   `yaml:"pathStyle"` // Use path-style access for S3
+	UseSSL    bool   `yaml:"useSSL"`
+	// CABundlePath is a PEM CA bundle trusted in addition to the system roots
+	// when verifying the S3 endpoint certificate.
+	CABundlePath string `yaml:"caBundlePath"`
+	// InsecureSkipVerify disables TLS certificate verification. Default false.
+	// Only for lab endpoints; prefer CABundlePath for private CAs.
+	InsecureSkipVerify bool `yaml:"insecureSkipVerify"`
+	// Deprecated: use CABundlePath. Still honoured when CABundlePath is empty.
+	CustomCAPath string `yaml:"customCAPath"`
+	// Deprecated: use InsecureSkipVerify. Still honoured (either one disables verification).
+	SkipCertValidation   bool   `yaml:"skipCertValidation"`
 	OrganizationStrategy string `yaml:"organizationStrategy"` // server-only, type-only, combined
 }
 
@@ -199,6 +207,8 @@ func loadFromEnvironment() {
 	CFG.S3.UseSSL = parseEnvBool("S3_USE_SSL", true)
 	CFG.S3.CustomCAPath = getEnvOrDefault("S3_CUSTOM_CA_PATH", "")
 	CFG.S3.SkipCertValidation = parseEnvBool("S3_SKIP_CERT_VALIDATION", false)
+	CFG.S3.CABundlePath = getEnvOrDefault("S3_CA_BUNDLE_PATH", "")
+	CFG.S3.InsecureSkipVerify = parseEnvBool("S3_INSECURE_SKIP_VERIFY", false)
 
 	// Metadata DB settings
 	CFG.MetadataDB.Enabled = parseEnvBool("METADATA_DB_ENABLED", false)
@@ -499,8 +509,8 @@ func DisplayConfiguration() {
 		log.Printf("Prefix: %s", CFG.S3.Prefix)
 		log.Printf("Organization Strategy: %s", CFG.S3.OrganizationStrategy)
 		log.Printf("Use SSL: %t", CFG.S3.UseSSL)
-		log.Printf("Custom CA Path: %s", CFG.S3.CustomCAPath)
-		log.Printf("Skip Cert Validation: %t", CFG.S3.SkipCertValidation)
+		log.Printf("CA Bundle Path: %s", CFG.S3.EffectiveCABundlePath())
+		log.Printf("Insecure Skip Verify: %t", CFG.S3.EffectiveInsecureSkipVerify())
 	}
 
 	// Metrics settings
@@ -611,16 +621,17 @@ func ValidateConfig() error {
 			return fmt.Errorf("S3 access key and secret key must be specified when S3 backups are enabled")
 		}
 
-		// Validate custom CA path if provided
-		if CFG.S3.CustomCAPath != "" {
-			if _, err := os.Stat(CFG.S3.CustomCAPath); err != nil {
-				return fmt.Errorf("custom CA path %s is not accessible: %w", CFG.S3.CustomCAPath, err)
+		// Validate CA bundle path if provided
+		if caPath := CFG.S3.EffectiveCABundlePath(); caPath != "" {
+			if _, err := os.Stat(caPath); err != nil {
+				return fmt.Errorf("S3 CA bundle path %s is not accessible: %w", caPath, err)
+			}
+			if CFG.S3.EffectiveInsecureSkipVerify() {
+				log.Printf("Warning: both an S3 CA bundle and insecureSkipVerify are set. Verification is disabled and the CA bundle is ignored.")
 			}
 		}
-
-		// Validate that both custom CA and skip validation are not set
-		if CFG.S3.CustomCAPath != "" && CFG.S3.SkipCertValidation {
-			log.Printf("Warning: Both custom CA path and skip certificate validation are set. Custom CA will be ignored.")
+		if CFG.S3.SkipCertValidation || CFG.S3.CustomCAPath != "" {
+			log.Printf("Warning: S3_SKIP_CERT_VALIDATION/skipCertValidation and S3_CUSTOM_CA_PATH/customCAPath are deprecated; use S3_INSECURE_SKIP_VERIFY/insecureSkipVerify and S3_CA_BUNDLE_PATH/caBundlePath")
 		}
 	}
 

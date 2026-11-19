@@ -88,6 +88,14 @@ spec:
             {{- end }}
             - name: S3_USE_SSL
               value: {{ .Values.settings.s3.useSSL | quote }}
+            {{- if hasKey .Values.settings.s3 "insecureSkipVerify" }}
+            - name: S3_INSECURE_SKIP_VERIFY
+              value: {{ .Values.settings.s3.insecureSkipVerify | quote }}
+            {{- end }}
+            {{- if .Values.settings.s3.caBundlePath }}
+            - name: S3_CA_BUNDLE_PATH
+              value: {{ .Values.settings.s3.caBundlePath | quote }}
+            {{- end }}
             {{- if hasKey .Values.settings.s3 "skipCertValidation" }}
             - name: S3_SKIP_CERT_VALIDATION
               value: {{ .Values.settings.s3.skipCertValidation | quote }}

@@ -28,8 +28,8 @@ s3:
   secretKey: "O3KHT4VIkKcix02xbyZnRtAw2Nqe1jQ94hl6FDY9"
   prefix: "controller1/mysql/backups"  # Using a folder prefix for multi-controller sharing
   useSSL: true  # Set to true for HTTPS endpoints
-  customCAPath: ""  # Path to a custom CA certificate file if needed
-  skipCertValidation: false  # Set to true to skip SSL certificate validation (insecure)
+  caBundlePath: ""  # PEM CA bundle for a private-CA endpoint
+  insecureSkipVerify: false  # true disables TLS verification (insecure, lab only)
 
 # Metrics configuration
 metrics:

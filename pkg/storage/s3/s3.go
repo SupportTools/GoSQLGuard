@@ -3,8 +3,6 @@ package s3
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"log"
@@ -46,52 +44,25 @@ func NewClient() (*Client, error) {
 	}, nil
 }
 
+// newHTTPClient returns the HTTP client used for S3 requests. TLS
+// certificates are verified by default; see config.S3Config.TLSConfig.
+func newHTTPClient(cfg config.S3Config) (*http.Client, error) {
+	tlsConfig, err := cfg.TLSConfig()
+	if err != nil {
+		return nil, err
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = tlsConfig
+	return &http.Client{Transport: transport}, nil
+}
+
 // getS3Client initializes and returns an S3 client based on configuration
 func getS3Client() (*s3.Client, error) {
 	ctx := context.Background()
 
-	// Create custom HTTP client with TLS configuration
-	httpClient := &http.Client{}
-
-	// Configure TLS settings if needed
-	if config.CFG.S3.UseSSL {
-		tlsConfig := &tls.Config{
-			MinVersion: tls.VersionTLS12,
-		}
-
-		// Load custom CA if specified
-		if config.CFG.S3.CustomCAPath != "" && !config.CFG.S3.SkipCertValidation {
-			rootCAs, _ := x509.SystemCertPool()
-			if rootCAs == nil {
-				rootCAs = x509.NewCertPool()
-			}
-
-			// Read the custom CA certificate
-			caCert, err := os.ReadFile(config.CFG.S3.CustomCAPath)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read custom CA certificate: %w", err)
-			}
-
-			// Add the custom CA to the cert pool
-			if ok := rootCAs.AppendCertsFromPEM(caCert); !ok {
-				return nil, fmt.Errorf("failed to append custom CA certificate")
-			}
-
-			tlsConfig.RootCAs = rootCAs
-			log.Printf("Using custom CA certificate from %s", config.CFG.S3.CustomCAPath)
-		}
-
-		// Skip certificate validation if specified
-		if config.CFG.S3.SkipCertValidation {
-			tlsConfig.InsecureSkipVerify = true
-			log.Printf("Warning: TLS certificate validation is disabled for S3 connections")
-		}
-
-		// Set up the custom transport with our TLS config
-		transport := &http.Transport{
-			TLSClientConfig: tlsConfig,
-		}
-		httpClient.Transport = transport
+	httpClient, err := newHTTPClient(config.CFG.S3)
+	if err != nil {
+		return nil, err
 	}
 
 	// Set up common AWS SDK options

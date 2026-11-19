@@ -142,7 +142,11 @@ settings:
     secretKey: ""  # Will be stored in a Kubernetes secret
     prefix: "mysql"
     useSSL: true
-    skipCertValidation: false
+    # TLS: certificates are verified by default. caBundlePath is a PEM bundle
+    # (mount it into the pod) trusted in addition to the system roots.
+    # insecureSkipVerify disables verification; lab endpoints only.
+    caBundlePath: ""
+    insecureSkipVerify: false
     organizationStrategy: "combined"  # combined, server-only, or type-only
   
   # Metadata database configuration

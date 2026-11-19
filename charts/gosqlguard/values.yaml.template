@@ -97,6 +97,9 @@ settings:
       accessKey: ""  # Will be stored in a Kubernetes secret
       secretKey: ""  # Will be stored in a Kubernetes secret
       useSSL: true
+      # TLS is verified by default; see README "S3 TLS verification".
+      caBundlePath: ""
+      insecureSkipVerify: false
 
 # Persistence configuration for local backups
 persistence:
