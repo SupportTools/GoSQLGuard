@@ -85,8 +85,11 @@ func getS3Client() (*s3.Client, error) {
 
 		// For custom endpoints, we'll configure the S3 client options directly
 		// The endpoint will be set when creating the S3 client
-	} else {
-		// Standard AWS S3 - add region
+	}
+
+	// The configured region applies to custom endpoints too; without it the SDK
+	// falls back to AWS_REGION / ~/.aws/config and fails when neither is set.
+	if config.CFG.S3.Region != "" {
 		sdkOptions = append(sdkOptions, awsconfig.WithRegion(config.CFG.S3.Region))
 	}
 
