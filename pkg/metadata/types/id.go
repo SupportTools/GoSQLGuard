@@ -20,9 +20,9 @@ func NewBackupID(serverName, database, backupType string, now time.Time) string 
 	var b [4]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		// crypto/rand does not fail on supported platforms; fall back to the
-		// nanosecond clock rather than returning a colliding ID.
-		return fmt.Sprintf("%s-%s-%s-%s-%08x", serverName, database, backupType,
-			now.Format("20060102-150405"), uint32(now.UnixNano()))
+		// sub-second clock rather than returning a colliding ID.
+		return fmt.Sprintf("%s-%s-%s-%s-%09d", serverName, database, backupType,
+			now.Format("20060102-150405"), now.Nanosecond())
 	}
 	return fmt.Sprintf("%s-%s-%s-%s-%s", serverName, database, backupType,
 		now.Format("20060102-150405"), hex.EncodeToString(b[:]))
