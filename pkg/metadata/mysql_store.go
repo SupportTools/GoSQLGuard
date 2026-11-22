@@ -2,6 +2,7 @@
 package metadata
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -96,12 +97,23 @@ type DBStore struct {
 	initialized bool
 }
 
+// errStoreNotReady is returned by DBStore writes when the store has no usable
+// database handle (db is nil or the store was never initialized).
+var errStoreNotReady = errors.New("metadata database store is not initialized")
+
+// ready reports whether the store has a database handle it may use. Every method
+// that touches s.db checks it first, so an uninitialized store degrades to
+// "no records / write refused" instead of a nil-pointer panic inside GORM.
+func (s *DBStore) ready() bool {
+	return s.db != nil && s.initialized
+}
+
 // InitializeMetadataDatabase initializes the metadata database
 func InitializeMetadataDatabase() error {
 	// If database isn't enabled, use file-based storage
 	if !config.CFG.MetadataDB.Enabled {
 		log.Println("Metadata database is not enabled, using file-based storage")
-		return Initialize()
+		return initializeFileStore()
 	}
 
 	// Connect to the database
@@ -109,7 +121,7 @@ func InitializeMetadataDatabase() error {
 	if err != nil {
 		log.Printf("Failed to connect to metadata database: %v", err)
 		log.Println("Falling back to file-based metadata")
-		return Initialize()
+		return initializeFileStore()
 	}
 	DB = db
 	log.Printf("DEBUG: metadata.DB has been set to non-nil value")
@@ -120,7 +132,7 @@ func InitializeMetadataDatabase() error {
 		if err := runMigrations(db); err != nil {
 			log.Printf("Failed to run migrations: %v", err)
 			log.Println("Falling back to file-based metadata")
-			return Initialize()
+			return initializeFileStore()
 		}
 	}
 
@@ -403,8 +415,8 @@ func (s *DBStore) CreateBackupMeta(serverName, serverType, database, backupType 
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	// Create unique ID using server, database, and timestamp
-	id := fmt.Sprintf("%s-%s-%s-%s", serverName, database, backupType, time.Now().Format("20060102-150405"))
+	// Unique ID: server, database, type, timestamp and a random suffix
+	id := types.NewBackupID(serverName, database, backupType, time.Now())
 
 	// Get retention policy information
 	var retentionText string
@@ -444,8 +456,9 @@ func (s *DBStore) CreateBackupMeta(serverName, serverType, database, backupType 
 		dbBackup.ExpiresAt = &expiresCopy
 	}
 
-	err := s.db.Create(&dbBackup).Error
-	if err != nil {
+	if !s.ready() {
+		log.Printf("Error creating backup record in database: %v", errStoreNotReady)
+	} else if err := s.db.Create(&dbBackup).Error; err != nil {
 		log.Printf("Error creating backup record in database: %v", err)
 	}
 
@@ -470,6 +483,9 @@ func (s *DBStore) CreateBackupMeta(serverName, serverType, database, backupType 
 
 // UpdateBackupStatus updates the status of a backup
 func (s *DBStore) UpdateBackupStatus(id string, status types.BackupStatus, localPaths map[string]string, size int64, errorMsg string) error {
+	if !s.ready() {
+		return errStoreNotReady
+	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -524,6 +540,9 @@ func (s *DBStore) UpdateBackupStatus(id string, status types.BackupStatus, local
 
 // UpdateS3UploadStatus updates the S3 upload status of a backup
 func (s *DBStore) UpdateS3UploadStatus(id string, status types.BackupStatus, s3Keys map[string]string, errorMsg string) error {
+	if !s.ready() {
+		return errStoreNotReady
+	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -607,6 +626,9 @@ func (s *DBStore) updateStats(tx *gorm.DB) error {
 
 // UpdateLogFilePath updates the log file path for a backup
 func (s *DBStore) UpdateLogFilePath(id string, logFilePath string) error {
+	if !s.ready() {
+		return errStoreNotReady
+	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -615,6 +637,9 @@ func (s *DBStore) UpdateLogFilePath(id string, logFilePath string) error {
 
 // GetBackups returns all backups
 func (s *DBStore) GetBackups() []types.BackupMeta {
+	if !s.ready() {
+		return []types.BackupMeta{}
+	}
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -629,6 +654,9 @@ func (s *DBStore) GetBackups() []types.BackupMeta {
 
 // GetBackupsFiltered returns backups filtered by server, database and/or type
 func (s *DBStore) GetBackupsFiltered(serverName, database, backupType string, activeOnly bool) []types.BackupMeta {
+	if !s.ready() {
+		return []types.BackupMeta{}
+	}
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -663,6 +691,9 @@ func (s *DBStore) GetBackupsFiltered(serverName, database, backupType string, ac
 
 // GetBackupByID returns a specific backup by ID
 func (s *DBStore) GetBackupByID(id string) (types.BackupMeta, bool) {
+	if !s.ready() {
+		return types.BackupMeta{}, false
+	}
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -685,6 +716,9 @@ func (s *DBStore) GetBackupByID(id string) (types.BackupMeta, bool) {
 
 // MarkBackupDeleted marks a backup as deleted
 func (s *DBStore) MarkBackupDeleted(id string) error {
+	if !s.ready() {
+		return errStoreNotReady
+	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -693,6 +727,9 @@ func (s *DBStore) MarkBackupDeleted(id string) error {
 
 // GetStats returns statistics about the backups
 func (s *DBStore) GetStats() map[string]interface{} {
+	if !s.ready() {
+		return createEmptyStats()
+	}
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -828,6 +865,9 @@ func createEmptyStats() map[string]interface{} {
 // PurgeDeletedBackups removes backup records that have been marked as deleted
 // and are older than the specified duration
 func (s *DBStore) PurgeDeletedBackups(olderThan time.Duration) int {
+	if !s.ready() {
+		return 0
+	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 

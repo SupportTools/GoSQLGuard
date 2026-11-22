@@ -68,7 +68,7 @@ func TestMySQLStoreMockOperations(t *testing.T) {
 
 	// Note: In real implementation, we'd need to handle the complex GORM queries
 	err = dbStore.UpdateBackupStatus(backupID, types.StatusSuccess, map[string]string{"local": "/backup1"}, 1024, "")
-	
+
 	// Check that no error occurred (in a mock environment, GORM might not return errors)
 	if err != nil {
 		t.Logf("UpdateBackupStatus returned error: %v", err)
@@ -193,9 +193,13 @@ func TestMySQLStoreStatistics(t *testing.T) {
 
 	stats := fileStore.GetStats()
 
-	assert.Equal(t, 3, stats["totalBackups"])
-	assert.Equal(t, 2, stats["successCount"])
-	assert.Equal(t, 1, stats["errorCount"])
+	// GetStats reports totalCount plus per-status counts under statusCounts; the
+	// dashboard templates read those keys. ("totalBackups"/"successCount"/
+	// "errorCount" were never emitted by any store.)
+	assert.Equal(t, 3, stats["totalCount"])
+	statusCounts := stats["statusCounts"].(map[string]int)
+	assert.Equal(t, 2, statusCounts["success"])
+	assert.Equal(t, 1, statusCounts["error"])
 	assert.Equal(t, int64(3072), stats["totalLocalSize"])
 
 	// Check type distribution

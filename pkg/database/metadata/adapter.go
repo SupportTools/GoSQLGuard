@@ -131,8 +131,8 @@ func (s *DBMetadataStore) CreateBackupMeta(serverName, serverType, database, bac
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	// Create unique ID using server, database, and timestamp
-	id := fmt.Sprintf("%s-%s-%s-%s", serverName, database, backupType, time.Now().Format("20060102-150405"))
+	// Unique ID: server, database, type, timestamp and a random suffix
+	id := types.NewBackupID(serverName, database, backupType, time.Now())
 
 	// Get retention policy information
 	var retentionText string

@@ -13,19 +13,19 @@ import (
 
 func TestBackupFilePattern(t *testing.T) {
 	tests := []struct {
-		name      string
-		filename  string
+		name        string
+		filename    string
 		shouldMatch bool
-		expected  map[string]string
+		expected    map[string]string
 	}{
 		{
 			name:        "Valid hourly backup",
 			filename:    "server1-database1-hourly-20250523-120000.sql.gz",
 			shouldMatch: true,
 			expected: map[string]string{
-				"server":   "server1",
-				"database": "database1",
-				"type":     "hourly",
+				"server":    "server1",
+				"database":  "database1",
+				"type":      "hourly",
 				"timestamp": "20250523-120000",
 			},
 		},
@@ -34,9 +34,9 @@ func TestBackupFilePattern(t *testing.T) {
 			filename:    "prod-server-users-daily-20250523-000000.sql.gz",
 			shouldMatch: true,
 			expected: map[string]string{
-				"server":   "prod-server",
-				"database": "users",
-				"type":     "daily",
+				"server":    "prod-server",
+				"database":  "users",
+				"type":      "daily",
 				"timestamp": "20250523-000000",
 			},
 		},
@@ -45,9 +45,9 @@ func TestBackupFilePattern(t *testing.T) {
 			filename:    "test-data-manual-20250523-143052.sql.gz",
 			shouldMatch: true,
 			expected: map[string]string{
-				"server":   "test",
-				"database": "data",
-				"type":     "manual",
+				"server":    "test",
+				"database":  "data",
+				"type":      "manual",
 				"timestamp": "20250523-143052",
 			},
 		},
@@ -76,7 +76,7 @@ func TestBackupFilePattern(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			matches := backupFilePattern.FindStringSubmatch(tt.filename)
-			
+
 			if tt.shouldMatch {
 				require.NotNil(t, matches, "Expected pattern to match %s", tt.filename)
 				assert.Equal(t, tt.expected["server"], matches[1])
@@ -98,9 +98,9 @@ func TestScanLocalStorage(t *testing.T) {
 
 	// Create test backup files
 	testFiles := []struct {
-		path     string
-		content  string
-		valid    bool
+		path    string
+		content string
+		valid   bool
 	}{
 		{
 			path:    "hourly/server1-db1-hourly-20250523-100000.sql.gz",
@@ -138,18 +138,13 @@ func TestScanLocalStorage(t *testing.T) {
 		fullPath := filepath.Join(tempDir, tf.path)
 		err := os.MkdirAll(filepath.Dir(fullPath), 0750)
 		require.NoError(t, err)
-		
+
 		err = os.WriteFile(fullPath, []byte(tf.content), 0644)
 		require.NoError(t, err)
 	}
 
-	// Mock config for testing
-	oldBackupDir := backupDir
-	backupDir = tempDir
-	defer func() { backupDir = oldBackupDir }()
-
 	// Scan local storage
-	backups := scanLocalStorage()
+	backups := scanLocalStorage(tempDir)
 
 	// Verify results
 	expectedCount := 3
@@ -179,7 +174,7 @@ func TestScanLocalStorage(t *testing.T) {
 
 func TestReconcileBackups(t *testing.T) {
 	now := time.Now()
-	
+
 	testBackups := []RecoveredBackup{
 		// Duplicate - local
 		{
@@ -263,12 +258,4 @@ func TestFormatBytes(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
-}
-
-// Helper variable for testing
-var backupDir string
-
-// Override scanLocalStorage for testing
-func init() {
-	// Save original function if needed
 }

@@ -8,36 +8,36 @@ on:
 
 jobs:
   Test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted-linux
+
+    # Fetch tier (cluster-services-1506): self-hosted ARC runner (SupportTools org pool).
+    #   - Go toolchain: baked into the runner image (1.26.x, also in the tool cache); no setup-go
+    #     download, GOTOOLCHAIN=local. The module declares go 1.23.0; gosec v2.30.0 needs >= 1.26.
+    #   - Go modules and the two pinned analysis tools: Athens only (GOPROXY=https://goproxy.support.tools,
+    #     a cache we run, no upstream fallback), go.sum / sum.golang.org verified.
+    #   - helm (chart check): baked into the runner image.
+    env:
+      STATICCHECK_VERSION: v0.8.2   # honnef.co/go/tools, needs Go >= 1.26
+      GOSEC_VERSION: v2.30.0        # github.com/securego/gosec/v2, needs Go >= 1.26
+      GOPROXY: https://goproxy.support.tools
+      GOTOOLCHAIN: local
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          # gosec v2.30.0 needs Go >= 1.26; the module itself still declares go 1.23.
-          go-version: "1.26.3"
-          cache: false
+      - name: Verify baked Go
+        run: |
+          set -euo pipefail
+          command -v go >/dev/null 2>&1 || { echo "::error::go is missing from this self-hosted runner; it must be baked into the runner image (no download fallback)."; exit 1; }
+          go version
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go1.26-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go1.26-
-
-      # Fetch tier: pinned upstream (proxy.golang.org, verified against sum.golang.org).
-      # This job runs on a GitHub-hosted runner that cannot reach Athens; moving it onto
-      # the self-hosted pool + Athens is tracked in cluster-services (follow-up of 1493).
       - name: Install static analysis tools (pinned)
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.30.0
+          echo "go module source: GOPROXY=${GOPROXY}"
+          GOBIN="${RUNNER_TEMP}/bin" go install "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}"
+          GOBIN="${RUNNER_TEMP}/bin" go install "github.com/securego/gosec/v2/cmd/gosec@${GOSEC_VERSION}"
+          echo "${RUNNER_TEMP}/bin" >> "$GITHUB_PATH"
 
       - name: Go static analysis
         run: |
@@ -46,11 +46,10 @@ jobs:
           go vet ./...
 
       - name: Unit tests
-        run: |
-          # TLS verification tests (cluster-services-1493) plus the packages that pass today.
-          # pkg/metadata and cmd/metadata-recovery have pre-existing failures and are
-          # excluded until fixed (tracked as a follow-up).
-          go test -count=1 ./pkg/config/... ./pkg/storage/... ./pkg/api/... ./pkg/adminserver/...
+        run: go test -count=1 ./...
+
+      - name: Chart values template check
+        run: scripts/check-chart-values-template.sh
 
       - name: Dependency management
         run: |
@@ -69,7 +68,7 @@ jobs:
 
   Build:
     needs: Test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted-linux
 
     steps:
       - uses: actions/checkout@v4
@@ -87,6 +86,10 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      # Fetch tiers: see the Dockerfile header. Base images from the Harbor Docker Hub proxy by digest,
+      # Go modules from Athens only, apt from fetch-cache with no upstream fallback.
+      # (The old --cache-from supporttools/gosqlguard:latest pulled from Docker Hub and never matched:
+      # no build exported a cache. Dropped.)
       - name: Docker build and push
         run: |
           docker buildx build \
@@ -95,7 +98,8 @@ jobs:
           --build-arg VERSION=v${{ github.run_number }} \
           --build-arg GIT_COMMIT=${{ github.sha }} \
           --build-arg BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
-          --cache-from supporttools/gosqlguard:latest \
+          --build-arg GOPROXY=https://goproxy.support.tools \
+          --build-arg APT_FALLBACK=none \
           -t supporttools/gosqlguard:"0.1.${{ github.run_number }}" \
           -t supporttools/gosqlguard:latest \
           ${{ github.event_name == 'push' && '--push' || '' }} \
@@ -104,7 +108,9 @@ jobs:
   Publish:
     # Only merged code is published; pull requests build the image without pushing it.
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    # Self-hosted (cluster-services-1506): helm and envsubst are baked into the runner image, so
+    # there is no setup-helm download from get.helm.sh.
+    runs-on: self-hosted-linux
     needs:
       - Build
 
@@ -112,8 +118,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Helm
-        uses: azure/setup-helm@v4.2.0
+      - name: Helm version (baked)
+        run: helm version --short
 
       - name: Helm Lint
         run: helm lint charts/gosqlguard/

@@ -6,7 +6,7 @@ replicaCount: 1
 image:
   repository: supporttools/gosqlguard
   pullPolicy: IfNotPresent
-  tag: "${IMAGE_TAG}"  # Will be substituted by CI/CD pipeline
+  tag: "${IMAGE_TAG}"  # Substituted by the Publish job. Otherwise identical to values.yaml (scripts/check-chart-values-template.sh)
 
 imagePullSecrets: []
 nameOverride: ""
@@ -25,17 +25,23 @@ settings:
   # Metrics configuration  
   metrics:
     enabled: true
-    port: 9090
+    port: 8080
   
-  # Database connections
-  databases:
+  # Database connections - multi-server support
+  database_servers:
     - name: "db1"
       type: "mysql"  # mysql or postgresql
       host: "mysql.example.com"
       port: 3306
-      user: "backup_user"
+      username: "backup_user"
       password: "password"  # Will be stored in a Kubernetes secret
-      databases: ["db1", "db2", "db3"]  # List of databases to backup
+      includeDatabases: ["db1", "db2", "db3"]  # List of databases to backup
+      excludeDatabases: []  # List of databases to exclude
+      # Optional server-specific MySQL dump options
+      mysqlDumpOptions:
+        singleTransaction: true    # --single-transaction
+        quick: true                # --quick
+        skipLockTables: false      # --skip-lock-tables
   
   # MySQL dump options - global defaults
   mysqlDumpOptions:
@@ -50,32 +56,69 @@ settings:
     customOptions: []          # Any additional custom options as a list
     
   # Backup schedules
-  backupSchedules:
+  backupTypes:
     hourly:
-      enabled: true
-      cron: "0 * * * *"  # Every hour
-      retention: 24  # Keep 24 hourly backups
+      schedule: "0 * * * *"  # Every hour
+      local:
+        enabled: true
+        retention:
+          duration: "24h"  # Keep backups for 24 hours
+          forever: false
+      s3:
+        enabled: false
+        retention:
+          duration: "24h"
+          forever: false
       mysqlDumpOptions:
         skipComments: true     # Skip SQL comments for smaller hourly backups
     daily:
-      enabled: true
-      cron: "0 0 * * *"  # Every day at midnight
-      retention: 7  # Keep 7 daily backups
-      mysqlDumpOptions: {}     # Use global defaults
+      schedule: "0 0 * * *"  # Every day at midnight
+      local:
+        enabled: true
+        retention:
+          duration: "168h"  # 7 days
+          forever: false
+      s3:
+        enabled: false
+        retention:
+          duration: "168h"
+          forever: false
     weekly:
-      enabled: true
-      cron: "0 0 * * 0"  # Every Sunday at midnight
-      retention: 4  # Keep 4 weekly backups
-      mysqlDumpOptions: {}     # Use global defaults
+      schedule: "0 0 * * 0"  # Every Sunday at midnight
+      local:
+        enabled: true
+        retention:
+          duration: "672h"  # 4 weeks
+          forever: false
+      s3:
+        enabled: false
+        retention:
+          duration: "672h"
+          forever: false
     monthly:
-      enabled: false
-      cron: "0 0 1 * *"  # First day of month at midnight
-      retention: 12      # Keep 12 monthly backups
-      mysqlDumpOptions: {}     # Use global defaults
+      schedule: "0 0 1 * *"  # First day of month at midnight
+      local:
+        enabled: false
+        retention:
+          duration: "8760h"  # 12 months
+          forever: false
+      s3:
+        enabled: false
+        retention:
+          duration: "8760h"
+          forever: false
     yearly:
-      enabled: false
-      cron: "0 0 1 1 *"  # January 1st at midnight
-      retention: 5       # Keep 5 yearly backups
+      schedule: "0 0 1 1 *"  # January 1st at midnight
+      local:
+        enabled: false
+        retention:
+          duration: "0h"
+          forever: true  # Keep forever
+      s3:
+        enabled: false
+        retention:
+          duration: "0h"
+          forever: true
       mysqlDumpOptions:
         skipComments: false    # Include comments for better documentation
         compress: true         # Use compression for network transfer
@@ -85,21 +128,39 @@ settings:
           - "--events"         # Include events
   
   # Storage configuration
-  storage:
-    local:
-      enabled: true
-      path: "/backups"
-    s3:
-      enabled: false
-      endpoint: "s3.amazonaws.com"
-      bucket: "gosqlguard-backups"
-      region: "us-east-1"
-      accessKey: ""  # Will be stored in a Kubernetes secret
-      secretKey: ""  # Will be stored in a Kubernetes secret
-      useSSL: true
-      # TLS is verified by default; see README "S3 TLS verification".
-      caBundlePath: ""
-      insecureSkipVerify: false
+  local:
+    enabled: true
+    backupDirectory: "/backups"
+    organizationStrategy: "combined"  # combined, server-only, or type-only
+  
+  s3:
+    enabled: false
+    endpoint: "s3.amazonaws.com"
+    bucket: "gosqlguard-backups"
+    region: "us-east-1"
+    accessKey: ""  # Will be stored in a Kubernetes secret
+    secretKey: ""  # Will be stored in a Kubernetes secret
+    prefix: "mysql"
+    useSSL: true
+    # TLS: certificates are verified by default. caBundlePath is a PEM bundle
+    # (mount it into the pod) trusted in addition to the system roots.
+    # insecureSkipVerify disables verification; lab endpoints only.
+    caBundlePath: ""
+    insecureSkipVerify: false
+    organizationStrategy: "combined"  # combined, server-only, or type-only
+  
+  # Metadata database configuration
+  metadata_database:
+    enabled: true
+    host: "gosqlguard-mysql"
+    port: 3306
+    username: "gosqlguard"
+    password: "changeme"  # Will be stored in a Kubernetes secret
+    database: "gosqlguard_metadata"
+    maxOpenConns: 10
+    maxIdleConns: 5
+    connMaxLifetime: "5m"
+    autoMigrate: true
 
 # Persistence configuration for local backups
 persistence:
@@ -114,6 +175,26 @@ metadataPersistence:
   size: "1Gi"
   storageClass: ""
   accessMode: ReadWriteOnce
+
+# MySQL subchart configuration
+mysql:
+  enabled: true
+  auth:
+    rootPassword: "changeme"
+    database: "gosqlguard_metadata"
+    username: "gosqlguard"
+    password: "changeme"
+  primary:
+    persistence:
+      enabled: true
+      size: "8Gi"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
 
 serviceAccount:
   create: true
@@ -155,28 +236,3 @@ ingress:
         - path: /
           pathType: Prefix
   tls: []
-
-# MySQL subchart configuration for metadata storage
-mysql:
-  enabled: true
-  auth:
-    rootPassword: "changeme"
-    database: "gosqlguard_metadata"
-    username: "gosqlguard"
-    password: "changeme"
-  primary:
-    persistence:
-      enabled: true
-      size: "8Gi"
-    resources:
-      requests:
-        cpu: 100m
-        memory: 256Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
-
-serviceAccount:
-  create: true
-  annotations: {}
-  name: ""
