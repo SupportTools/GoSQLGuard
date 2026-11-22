@@ -53,6 +53,18 @@ func (f *fakeStore) UpdateS3UploadStatus(id string, status types.BackupStatus, s
 	return nil
 }
 
+func (f *fakeStore) SetBackupTimes(id string, createdAt, completedAt time.Time) error {
+	m, ok := f.created[id]
+	if !ok {
+		return fmt.Errorf("backup %s not found", id)
+	}
+	m.CreatedAt = createdAt
+	if !completedAt.IsZero() {
+		m.CompletedAt = completedAt
+	}
+	return nil
+}
+
 func (f *fakeStore) GetBackups() []types.BackupMeta { return f.existing }
 func (f *fakeStore) GetBackupsFiltered(string, string, string, bool) []types.BackupMeta {
 	return nil
@@ -207,6 +219,10 @@ func TestRecoveryRoundTrip(t *testing.T) {
 		assert.Equal(t, w.localPaths, m.LocalPaths)
 		assert.Equal(t, w.s3Keys, m.S3Keys)
 		assert.Equal(t, int64(w.size), m.Size)
+		// cluster-services-1560: the record carries the backup's own time, not
+		// the time recovery ran.
+		assert.True(t, w.at.Equal(m.CreatedAt), "%s/%s/%s: CreatedAt %v, want %v", w.server, w.db, w.backupType, m.CreatedAt, w.at)
+		assert.True(t, w.at.Equal(m.CompletedAt), "%s/%s/%s: CompletedAt %v, want %v", w.server, w.db, w.backupType, m.CompletedAt, w.at)
 	}
 
 	// Merge mode: a second pass over the same files adds nothing.

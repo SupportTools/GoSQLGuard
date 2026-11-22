@@ -419,24 +419,7 @@ func (s *DBStore) CreateBackupMeta(serverName, serverType, database, backupType 
 	id := types.NewBackupID(serverName, database, backupType, time.Now())
 
 	// Get retention policy information
-	var retentionText string
-	var expiresAt time.Time
-
-	if typeConfig, exists := config.CFG.BackupTypes[backupType]; exists {
-		if typeConfig.Local.Enabled && typeConfig.Local.Retention.Forever {
-			retentionText = "Keep forever"
-		} else if typeConfig.Local.Enabled {
-			duration, err := time.ParseDuration(typeConfig.Local.Retention.Duration)
-			if err == nil {
-				expiresAt = time.Now().Add(duration)
-				retentionText = fmt.Sprintf("Keep for %s (until %s)",
-					typeConfig.Local.Retention.Duration,
-					expiresAt.Format("2006-01-02 15:04:05"))
-			} else {
-				retentionText = "Unknown retention policy"
-			}
-		}
-	}
+	retentionText, expiresAt := config.LocalRetention(backupType, time.Now())
 
 	// Create backup in database
 	dbBackup := DatabaseBackup{
@@ -536,6 +519,36 @@ func (s *DBStore) UpdateBackupStatus(id string, status types.BackupStatus, local
 
 	// Commit transaction
 	return tx.Commit().Error
+}
+
+// SetBackupTimes sets a backup's creation and completion times and recomputes
+// its retention from createdAt (see types.MetadataStore).
+func (s *DBStore) SetBackupTimes(id string, createdAt, completedAt time.Time) error {
+	if !s.ready() {
+		return errStoreNotReady
+	}
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	var backup DatabaseBackup
+	if err := s.db.Select("id", "backup_type").Where("id = ?", id).First(&backup).Error; err != nil {
+		return fmt.Errorf("backup with ID %s: %w", id, err)
+	}
+
+	retentionText, expiresAt := config.LocalRetention(backup.BackupType, createdAt)
+	updates := map[string]interface{}{
+		"created_at":       createdAt,
+		"retention_policy": retentionText,
+		"expires_at":       nil,
+	}
+	if !expiresAt.IsZero() {
+		updates["expires_at"] = expiresAt
+	}
+	if !completedAt.IsZero() {
+		updates["completed_at"] = completedAt
+	}
+
+	return s.db.Model(&DatabaseBackup{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // UpdateS3UploadStatus updates the S3 upload status of a backup

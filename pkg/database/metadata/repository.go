@@ -110,6 +110,27 @@ func (r *Repository) UpdateS3UploadStatus(id, status, errorMsg string, uploadTim
 	}).Error
 }
 
+// SetBackupTimes overwrites a backup's created_at, retention_policy and
+// expires_at (NULL for a zero expiresAt), and completed_at when completedAt is
+// not zero.
+func (r *Repository) SetBackupTimes(id string, createdAt, completedAt time.Time, retentionPolicy string, expiresAt time.Time) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	updates := map[string]interface{}{
+		"created_at":       createdAt,
+		"retention_policy": retentionPolicy,
+		"expires_at":       nil,
+	}
+	if !expiresAt.IsZero() {
+		updates["expires_at"] = expiresAt
+	}
+	if !completedAt.IsZero() {
+		updates["completed_at"] = completedAt
+	}
+	return r.db.Model(&Backup{}).Where("id = ?", id).Updates(updates).Error
+}
+
 // GetBackupByID retrieves a backup by ID with all related data
 func (r *Repository) GetBackupByID(id string) (*Backup, error) {
 	r.mutex.RLock()

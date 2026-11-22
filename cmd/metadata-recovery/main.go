@@ -341,7 +341,8 @@ func reconcileBackups(backups []RecoveredBackup) []RecoveredBackupSet {
 
 // processRecoveredBackups writes one metadata record per recovered backup run.
 //
-// The record ID is the one the store generates. (Recovery used to overwrite it
+// The record ID is the one the store generates, and the record's CreatedAt,
+// CompletedAt and ExpiresAt come from the backup's own timestamp. (Recovery used to overwrite it
 // on the returned struct with a name-derived ID, which the store never saw, so
 // the status update that followed targeted an ID that did not exist.)
 // In merge mode a run is skipped when an existing record already points at any
@@ -382,6 +383,13 @@ func processRecoveredBackups(store types.MetadataStore, backups []RecoveredBacku
 			if err := store.UpdateS3UploadStatus(meta.ID, types.StatusSuccess, set.S3Keys, ""); err != nil {
 				log.Printf("Error updating S3 upload status for %s: %v", label, err)
 			}
+		}
+
+		// After the status updates, which stamp the current time: the record
+		// takes the time parsed from the backup's file name, and its retention
+		// expiry is counted from that time, as it was for the original record.
+		if err := store.SetBackupTimes(meta.ID, set.CreatedAt, set.CreatedAt); err != nil {
+			log.Printf("Error setting backup times for %s: %v", label, err)
 		}
 
 		if *verbose {

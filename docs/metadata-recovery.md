@@ -201,7 +201,7 @@ metadata-recovery -config /path/to/config.yaml -verbose
 3. Gets file sizes
 4. Groups the by-server and by-type copies, local and S3, of one backup run into a single metadata record holding every path. Server and database come from the by-server copy, because a by-type file name joins them with `_`; when only a by-type copy exists, the name is split at the first `_`.
 5. In `-merge` mode, skips backups whose paths an existing record already holds
-6. Records each backup with status success and its local paths / S3 keys. Known limitation: the metadata store interface has no way to set a record's creation time, so recovered records carry the recovery time as `createdAt`; the parsed backup time is logged with `-verbose`.
+6. Records each backup with status success and its local paths / S3 keys. The record's `createdAt` and `completedAt` are the timestamp parsed from the backup's file name, and its `expiresAt` / retention policy are counted from that time (so a recovered backup that is already past its local retention is due for the next retention run, as the original record would have been). `s3UploadComplete` is the recovery time, since the upload time is not recoverable.
 7. Saves the metadata (unless -dry-run is specified)
 
 #### Example Output
