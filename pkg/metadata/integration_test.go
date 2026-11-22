@@ -104,9 +104,10 @@ func testMetadataPersistence(t *testing.T) {
 
 	// Test 4: Statistics
 	stats := DefaultStore.GetStats()
-	assert.Equal(t, 2, stats["totalBackups"])
-	assert.Equal(t, 1, stats["successCount"])
-	assert.Equal(t, 1, stats["errorCount"])
+	assert.EqualValues(t, 2, stats["totalCount"])
+	statusCounts := stats["statusCounts"].(map[string]int)
+	assert.Equal(t, 1, statusCounts["success"])
+	assert.Equal(t, 1, statusCounts["error"])
 
 	// Test 5: Mark as deleted
 	err = DefaultStore.MarkBackupDeleted(backup1.ID)

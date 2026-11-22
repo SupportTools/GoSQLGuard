@@ -76,6 +76,14 @@ func Initialize() error {
 		return initializeDatabaseMetadata()
 	}
 
+	return initializeFileStore()
+}
+
+// initializeFileStore creates the file-based metadata store and makes it the
+// DefaultStore. It is also the fallback when the metadata database cannot be
+// used: the fallback must come here and not back through Initialize, which
+// would see MetadataDB.Enabled again and recurse until the stack overflows.
+func initializeFileStore() error {
 	// Create file-based store
 	store := &Store{
 		metadata: Data{
@@ -212,8 +220,8 @@ func (s *Store) CreateBackupMeta(serverName, serverType, database, backupType st
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	// Create unique ID using server, database, and timestamp
-	id := fmt.Sprintf("%s-%s-%s-%s", serverName, database, backupType, time.Now().Format("20060102-150405"))
+	// Unique ID: server, database, type, timestamp and a random suffix
+	id := types.NewBackupID(serverName, database, backupType, time.Now())
 
 	// Get retention policy information
 	var retentionText string

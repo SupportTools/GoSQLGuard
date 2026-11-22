@@ -306,8 +306,9 @@ func TestFileStorePersistenceAcrossRestarts(t *testing.T) {
 
 	// Verify stats match
 	statsAfter := DefaultStore.GetStats()
-	assert.Equal(t, statsBefore["totalBackups"], statsAfter["totalBackups"])
-	assert.Equal(t, statsBefore["successCount"], statsAfter["successCount"])
+	require.NotNil(t, statsBefore["totalCount"])
+	assert.Equal(t, statsBefore["totalCount"], statsAfter["totalCount"])
+	assert.Equal(t, statsBefore["statusCounts"], statsAfter["statusCounts"])
 
 	// Verify we can still add new backups
 	backup3 := DefaultStore.CreateBackupMeta("server3", "mysql", "newdb", "weekly")

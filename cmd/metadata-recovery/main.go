@@ -28,10 +28,18 @@ var (
 	scanS3       = flag.Bool("s3", true, "Scan S3 storage for backups")
 	forceRebuild = flag.Bool("force", false, "Force rebuild even if metadata exists")
 	mergeMode    = flag.Bool("merge", false, "Merge with existing metadata instead of replacing")
-	
+
 	// Regex pattern for backup filenames
 	// Format: {server}-{database}-{type}-{timestamp}.sql.gz
-	backupFilePattern = regexp.MustCompile(`^(.+?)-(.+?)-(hourly|daily|weekly|monthly|yearly|manual)-(\d{8}-\d{6})\.sql\.gz$`)
+	//
+	// The format is ambiguous when a name contains a hyphen, so it is resolved one
+	// way on purpose: the server name takes every hyphen and the database is the
+	// last hyphen-free token before the type ("prod-server-users-daily-..." is
+	// server "prod-server", database "users"). Server/host names commonly contain
+	// hyphens; MySQL/PostgreSQL database names conventionally use underscores.
+	// The previous lazy `(.+?)-(.+?)` split did the opposite and gave
+	// server "prod", database "server-users".
+	backupFilePattern = regexp.MustCompile(`^(.+)-([^-]+)-(hourly|daily|weekly|monthly|yearly|manual)-(\d{8}-\d{6})\.sql\.gz$`)
 )
 
 // RecoveredBackup represents a backup found during recovery
@@ -73,7 +81,7 @@ func main() {
 	var recoveredBackups []RecoveredBackup
 
 	if *scanLocal && config.CFG.Local.Enabled {
-		localBackups := scanLocalStorage()
+		localBackups := scanLocalStorage(config.CFG.Local.BackupDirectory)
 		recoveredBackups = append(recoveredBackups, localBackups...)
 		log.Printf("Found %d backups in local storage", len(localBackups))
 	}
@@ -90,9 +98,10 @@ func main() {
 	// Summary
 	stats := metadata.DefaultStore.GetStats()
 	log.Printf("\nRecovery Summary:")
-	log.Printf("- Total backups recovered: %d", stats["totalBackups"])
-	log.Printf("- Successful backups: %d", stats["successCount"])
-	log.Printf("- Failed backups: %d", stats["errorCount"])
+	statusCounts, _ := stats["statusCounts"].(map[string]int)
+	log.Printf("- Total backups recovered: %v", stats["totalCount"])
+	log.Printf("- Successful backups: %d", statusCounts["success"])
+	log.Printf("- Failed backups: %d", statusCounts["error"])
 	log.Printf("- Total local size: %s", formatBytes(stats["totalLocalSize"].(int64)))
 	log.Printf("- Total S3 size: %s", formatBytes(stats["totalS3Size"].(int64)))
 
@@ -106,10 +115,11 @@ func main() {
 	}
 }
 
-// scanLocalStorage scans local filesystem for backup files
-func scanLocalStorage() []RecoveredBackup {
+// scanLocalStorage scans backupDir on the local filesystem for backup files.
+// The directory is a parameter (rather than read from config.CFG inside) so the
+// scan can be exercised without loading the full application configuration.
+func scanLocalStorage(backupDir string) []RecoveredBackup {
 	var backups []RecoveredBackup
-	backupDir := config.CFG.Local.BackupDirectory
 
 	err := filepath.Walk(backupDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -192,7 +202,7 @@ func scanS3Storage() []RecoveredBackup {
 	err = svc.ListObjectsV2Pages(params, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 		for _, obj := range page.Contents {
 			key := *obj.Key
-			
+
 			// Skip non-backup files
 			if !strings.HasSuffix(key, ".sql.gz") {
 				continue
@@ -200,7 +210,7 @@ func scanS3Storage() []RecoveredBackup {
 
 			// Extract filename from key
 			filename := filepath.Base(key)
-			
+
 			// Parse filename
 			matches := backupFilePattern.FindStringSubmatch(filename)
 			if matches == nil {
@@ -239,7 +249,7 @@ func scanS3Storage() []RecoveredBackup {
 // processRecoveredBackups processes recovered backups and updates metadata
 func processRecoveredBackups(backups []RecoveredBackup) {
 	existingIDs := make(map[string]bool)
-	
+
 	// Get existing backup IDs if in merge mode
 	if *mergeMode {
 		for _, backup := range metadata.DefaultStore.GetBackups() {
@@ -251,7 +261,7 @@ func processRecoveredBackups(backups []RecoveredBackup) {
 	for _, backup := range backups {
 		// Generate ID
 		id := fmt.Sprintf("%s-%s-%s-%s", backup.ServerName, backup.Database, backup.BackupType, backup.Timestamp)
-		
+
 		// Skip if already exists in merge mode
 		if existingIDs[id] {
 			if *verbose {
@@ -345,7 +355,7 @@ func formatBytes(bytes int64) string {
 func reconcileBackups(backups []RecoveredBackup) []RecoveredBackup {
 	// Group backups by ID
 	backupMap := make(map[string][]RecoveredBackup)
-	
+
 	for _, backup := range backups {
 		id := fmt.Sprintf("%s-%s-%s-%s", backup.ServerName, backup.Database, backup.BackupType, backup.Timestamp)
 		backupMap[id] = append(backupMap[id], backup)
