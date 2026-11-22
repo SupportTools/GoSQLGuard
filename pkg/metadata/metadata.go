@@ -224,24 +224,7 @@ func (s *Store) CreateBackupMeta(serverName, serverType, database, backupType st
 	id := types.NewBackupID(serverName, database, backupType, time.Now())
 
 	// Get retention policy information
-	var retentionText string
-	var expiresAt time.Time
-
-	if typeConfig, exists := config.CFG.BackupTypes[backupType]; exists {
-		if typeConfig.Local.Enabled && typeConfig.Local.Retention.Forever {
-			retentionText = "Keep forever"
-		} else if typeConfig.Local.Enabled {
-			duration, err := time.ParseDuration(typeConfig.Local.Retention.Duration)
-			if err == nil {
-				expiresAt = time.Now().Add(duration)
-				retentionText = fmt.Sprintf("Keep for %s (until %s)",
-					typeConfig.Local.Retention.Duration,
-					expiresAt.Format("2006-01-02 15:04:05"))
-			} else {
-				retentionText = "Unknown retention policy"
-			}
-		}
-	}
+	retentionText, expiresAt := config.LocalRetention(backupType, time.Now())
 
 	// Create new metadata entry
 	meta := &types.BackupMeta{
@@ -300,6 +283,28 @@ func (s *Store) UpdateBackupStatus(id string, status types.BackupStatus, localPa
 			// Save changes
 			return s.save()
 		}
+	}
+
+	return fmt.Errorf("backup with ID %s not found", id)
+}
+
+// SetBackupTimes sets a backup's creation and completion times and recomputes
+// its retention from createdAt (see types.MetadataStore).
+func (s *Store) SetBackupTimes(id string, createdAt, completedAt time.Time) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	for i := range s.metadata.Backups {
+		b := &s.metadata.Backups[i]
+		if b.ID != id {
+			continue
+		}
+		b.CreatedAt = createdAt
+		if !completedAt.IsZero() {
+			b.CompletedAt = completedAt
+		}
+		b.RetentionPolicy, b.ExpiresAt = config.LocalRetention(b.BackupType, createdAt)
+		return s.save()
 	}
 
 	return fmt.Errorf("backup with ID %s not found", id)

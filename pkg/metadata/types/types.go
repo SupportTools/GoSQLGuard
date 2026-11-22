@@ -56,6 +56,13 @@ type MetadataStore interface {
 	// UpdateS3UploadStatus updates the S3 upload status of a backup
 	UpdateS3UploadStatus(id string, status BackupStatus, s3Keys map[string]string, errorMsg string) error
 
+	// SetBackupTimes sets a backup's CreatedAt and CompletedAt and recomputes
+	// its retention policy text and ExpiresAt from createdAt. It exists for
+	// metadata recovery, which rebuilds records for backups made in the past:
+	// CreateBackupMeta and UpdateBackupStatus stamp the current time. A zero
+	// completedAt leaves CompletedAt unchanged.
+	SetBackupTimes(id string, createdAt, completedAt time.Time) error
+
 	// GetBackups returns all backups
 	GetBackups() []BackupMeta
 
