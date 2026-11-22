@@ -48,65 +48,6 @@ type Manager struct {
 	s3Store    *s3.Client
 }
 
-// constructBackupPaths creates the paths for backup files in both by-server and by-type organizations
-func constructBackupPaths(serverName, backupType, dbName, timestamp string) (map[string]string, map[string]string) {
-	localPaths := make(map[string]string)
-	s3Keys := make(map[string]string)
-
-	// Base file name (without server prefix)
-	filename := fmt.Sprintf("%s-%s.sql.gz", dbName, timestamp)
-
-	// Server-prefixed filename for by-type organization
-	serverPrefixedFilename := fmt.Sprintf("%s_%s", serverName, filename)
-
-	// Local paths for combined organization
-	if config.CFG.Local.Enabled {
-		// By-server organization
-		localPaths["by-server"] = filepath.Join(
-			config.CFG.Local.BackupDirectory,
-			"by-server",
-			serverName,
-			backupType,
-			filename,
-		)
-
-		// By-type organization
-		localPaths["by-type"] = filepath.Join(
-			config.CFG.Local.BackupDirectory,
-			"by-type",
-			backupType,
-			serverPrefixedFilename,
-		)
-	}
-
-	// S3 keys for combined organization
-	if config.CFG.S3.Enabled {
-		prefix := config.CFG.S3.Prefix
-		if prefix != "" && !strings.HasSuffix(prefix, "/") {
-			prefix = prefix + "/"
-		}
-
-		// By-server organization
-		s3Keys["by-server"] = fmt.Sprintf(
-			"%sby-server/%s/%s/%s",
-			prefix,
-			serverName,
-			backupType,
-			filename,
-		)
-
-		// By-type organization
-		s3Keys["by-type"] = fmt.Sprintf(
-			"%sby-type/%s/%s",
-			prefix,
-			backupType,
-			serverPrefixedFilename,
-		)
-	}
-
-	return localPaths, s3Keys
-}
-
 // NewManager creates a new backup manager
 func NewManager() (*Manager, error) {
 	manager := &Manager{
@@ -388,10 +329,10 @@ func (m *Manager) createLogFile(id string) (string, *os.File, error) {
 // backupDatabase handles the backup process for a single database
 func (m *Manager) backupDatabase(serverName, serverType, database, backupType string, typeConfig config.BackupTypeConfig) error {
 	startTime := time.Now()
-	timestamp := startTime.Format("2006-01-02-15-04-05")
+	timestamp := startTime.Format(TimestampFormat)
 
 	// Create the backup paths using the combined organization strategy
-	localPaths, s3Keys := constructBackupPaths(serverName, backupType, database, timestamp)
+	localPaths, s3Keys := ConstructBackupPaths(serverName, backupType, database, timestamp)
 
 	// Create metadata entry for this backup
 	meta := metadata.DefaultStore.CreateBackupMeta(serverName, serverType, database, backupType)

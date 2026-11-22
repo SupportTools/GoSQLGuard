@@ -9,233 +9,243 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/supporttools/GoSQLGuard/pkg/backup"
+	"github.com/supporttools/GoSQLGuard/pkg/config"
+	"github.com/supporttools/GoSQLGuard/pkg/metadata/types"
 )
 
-func TestBackupFilePattern(t *testing.T) {
-	tests := []struct {
-		name        string
-		filename    string
-		shouldMatch bool
-		expected    map[string]string
-	}{
-		{
-			name:        "Valid hourly backup",
-			filename:    "server1-database1-hourly-20250523-120000.sql.gz",
-			shouldMatch: true,
-			expected: map[string]string{
-				"server":    "server1",
-				"database":  "database1",
-				"type":      "hourly",
-				"timestamp": "20250523-120000",
-			},
-		},
-		{
-			name:        "Valid daily backup with hyphen in server name",
-			filename:    "prod-server-users-daily-20250523-000000.sql.gz",
-			shouldMatch: true,
-			expected: map[string]string{
-				"server":    "prod-server",
-				"database":  "users",
-				"type":      "daily",
-				"timestamp": "20250523-000000",
-			},
-		},
-		{
-			name:        "Valid manual backup",
-			filename:    "test-data-manual-20250523-143052.sql.gz",
-			shouldMatch: true,
-			expected: map[string]string{
-				"server":    "test",
-				"database":  "data",
-				"type":      "manual",
-				"timestamp": "20250523-143052",
-			},
-		},
-		{
-			name:        "Invalid extension",
-			filename:    "server1-database1-hourly-20250523-120000.sql",
-			shouldMatch: false,
-		},
-		{
-			name:        "Invalid format - missing type",
-			filename:    "server1-database1-20250523-120000.sql.gz",
-			shouldMatch: false,
-		},
-		{
-			name:        "Invalid format - wrong timestamp",
-			filename:    "server1-database1-hourly-2025-05-23.sql.gz",
-			shouldMatch: false,
-		},
-		{
-			name:        "Invalid type",
-			filename:    "server1-database1-custom-20250523-120000.sql.gz",
-			shouldMatch: false,
-		},
+// fakeStore records what processRecoveredBackups writes. Only the methods
+// recovery calls do anything; the rest satisfy types.MetadataStore.
+type fakeStore struct {
+	existing []types.BackupMeta
+	created  map[string]*types.BackupMeta
+	order    []string
+	n        int
+}
+
+func newFakeStore() *fakeStore { return &fakeStore{created: map[string]*types.BackupMeta{}} }
+
+func (f *fakeStore) CreateBackupMeta(serverName, serverType, database, backupType string) *types.BackupMeta {
+	f.n++
+	id := fmt.Sprintf("store-id-%d", f.n)
+	m := &types.BackupMeta{ID: id, ServerName: serverName, ServerType: serverType, Database: database,
+		BackupType: backupType, Status: types.StatusPending}
+	f.created[id] = m
+	f.order = append(f.order, id)
+	return m
+}
+
+func (f *fakeStore) UpdateBackupStatus(id string, status types.BackupStatus, localPaths map[string]string, size int64, errorMsg string) error {
+	m, ok := f.created[id]
+	if !ok {
+		return fmt.Errorf("backup %s not found", id)
+	}
+	m.Status, m.LocalPaths, m.Size, m.ErrorMessage = status, localPaths, size, errorMsg
+	return nil
+}
+
+func (f *fakeStore) UpdateS3UploadStatus(id string, status types.BackupStatus, s3Keys map[string]string, errorMsg string) error {
+	m, ok := f.created[id]
+	if !ok {
+		return fmt.Errorf("backup %s not found", id)
+	}
+	m.S3UploadStatus, m.S3Keys, m.S3UploadError = status, s3Keys, errorMsg
+	return nil
+}
+
+func (f *fakeStore) GetBackups() []types.BackupMeta { return f.existing }
+func (f *fakeStore) GetBackupsFiltered(string, string, string, bool) []types.BackupMeta {
+	return nil
+}
+func (f *fakeStore) GetBackupByID(string) (types.BackupMeta, bool) { return types.BackupMeta{}, false }
+func (f *fakeStore) MarkBackupDeleted(string) error                { return nil }
+func (f *fakeStore) GetStats() map[string]interface{}              { return nil }
+func (f *fakeStore) UpdateLogFilePath(string, string) error        { return nil }
+func (f *fakeStore) PurgeDeletedBackups(time.Duration) int         { return 0 }
+func (f *fakeStore) Load() error                                   { return nil }
+func (f *fakeStore) Save() error                                   { return nil }
+
+// withRecoveryConfig points config.CFG at a local root and S3 prefix, and resets
+// the merge flag, for one test.
+func withRecoveryConfig(t *testing.T, localRoot, s3Prefix string) {
+	t.Helper()
+	saved, savedMerge := config.CFG, *mergeMode
+	t.Cleanup(func() { config.CFG, *mergeMode = saved, savedMerge })
+	config.CFG.Local.Enabled = true
+	config.CFG.Local.BackupDirectory = localRoot
+	config.CFG.S3.Enabled = true
+	config.CFG.S3.Prefix = s3Prefix
+	config.CFG.S3.Bucket = "backup-bucket"
+	*mergeMode = false
+}
+
+type wantBackup struct {
+	server, db, backupType string
+	at                     time.Time
+	size                   int
+	localPaths, s3Keys     map[string]string
+}
+
+// writeRealBackups lays out backups exactly where GoSQLGuard writes them, using
+// backup.ConstructBackupPaths and backup.TimestampFormat, and returns what
+// recovery should find plus the S3 keys (which are not on disk).
+func writeRealBackups(t *testing.T) []wantBackup {
+	t.Helper()
+	base := time.Date(2026, 11, 22, 1, 2, 3, 0, time.UTC)
+	specs := []struct{ server, db, backupType string }{
+		{"server1", "testdb", "daily"},
+		{"server1", "testdb", "hourly"},
+		{"prod-db-01", "app_users", "hourly"},    // hyphenated server, underscored db
+		{"mysql-a", "db-with-hyphens", "weekly"}, // hyphenated db
+		{"legacy_srv", "orders", "monthly"},      // underscored server: by-type name is ambiguous
+		{"srv", "2024-11-22", "manual"},          // db shaped like a date
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			matches := backupFilePattern.FindStringSubmatch(tt.filename)
+	var want []wantBackup
+	for i, s := range specs {
+		at := base.Add(time.Duration(i) * 37 * time.Minute)
+		localPaths, s3Keys := backup.ConstructBackupPaths(s.server, s.backupType, s.db, at.Format(backup.TimestampFormat))
+		require.Len(t, localPaths, 2)
+		require.Len(t, s3Keys, 2)
+		size := 100 + i
+		for _, p := range localPaths {
+			require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o750))
+			require.NoError(t, os.WriteFile(p, make([]byte, size), 0o600))
+		}
+		want = append(want, wantBackup{s.server, s.db, s.backupType, at, size, localPaths, s3Keys})
+	}
+	return want
+}
 
-			if tt.shouldMatch {
-				require.NotNil(t, matches, "Expected pattern to match %s", tt.filename)
-				assert.Equal(t, tt.expected["server"], matches[1])
-				assert.Equal(t, tt.expected["database"], matches[2])
-				assert.Equal(t, tt.expected["type"], matches[3])
-				assert.Equal(t, tt.expected["timestamp"], matches[4])
-			} else {
-				assert.Nil(t, matches, "Expected pattern not to match %s", tt.filename)
+// TestRecoveryRoundTrip is the regression test for cluster-services-1553: backups
+// written by the real path constructor, locally and to S3, must all be recovered
+// with the right server, database, type and timestamp, one metadata record per
+// backup run holding every copy's path.
+func TestRecoveryRoundTrip(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "backups")
+	withRecoveryConfig(t, root, "gosqlguard")
+	want := writeRealBackups(t)
+
+	// Noise that must be ignored.
+	for _, p := range []string{
+		".metadata/by-server/s/daily/db-2026-11-22-01-02-03.sql.gz",
+		"by-server/s/daily/notes.txt",
+		"stray-2026-11-22-01-02-03.sql.gz",
+	} {
+		full := filepath.Join(root, p)
+		require.NoError(t, os.MkdirAll(filepath.Dir(full), 0o750))
+		require.NoError(t, os.WriteFile(full, []byte("x"), 0o600))
+	}
+
+	local := scanLocalStorage(root)
+	require.Len(t, local, 2*len(want), "every by-server and by-type copy on disk")
+
+	var s3Copies []RecoveredBackup
+	prefix := backup.S3KeyPrefix()
+	for _, w := range want {
+		for _, k := range w.s3Keys {
+			b, ok := recoverS3Object(k, prefix, "backup-bucket", int64(w.size), time.Time{})
+			require.True(t, ok, "S3 key %s", k)
+			s3Copies = append(s3Copies, b)
+		}
+	}
+	_, ok := recoverS3Object("other-prefix/by-server/s/daily/db-2026-11-22-01-02-03.sql.gz", prefix, "b", 1, time.Time{})
+	assert.False(t, ok, "keys outside the configured prefix are not backups")
+
+	// Each parsed copy carries the right identity.
+	byPath := map[string]RecoveredBackup{}
+	for _, b := range append(append([]RecoveredBackup{}, local...), s3Copies...) {
+		byPath[b.Path] = b
+	}
+	for _, w := range want {
+		for org, p := range w.localPaths {
+			b, ok := byPath[p]
+			require.True(t, ok, "local copy %s not recovered", p)
+			assert.Equal(t, org, b.Organization)
+			assert.Equal(t, w.backupType, b.BackupType, p)
+			assert.Equal(t, w.at.Format(backup.TimestampFormat), b.Timestamp, p)
+			assert.True(t, w.at.Equal(b.CreatedAt), "%s: CreatedAt %v", p, b.CreatedAt)
+			if org == backup.OrgByServer {
+				assert.Equal(t, w.server, b.ServerName, p)
+				assert.Equal(t, w.db, b.Database, p)
 			}
-		})
-	}
-}
-
-func TestScanLocalStorage(t *testing.T) {
-	// Create temporary directory structure
-	tempDir, err := os.MkdirTemp("", "gosqlguard_recovery_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
-	// Create test backup files
-	testFiles := []struct {
-		path    string
-		content string
-		valid   bool
-	}{
-		{
-			path:    "hourly/server1-db1-hourly-20250523-100000.sql.gz",
-			content: "backup data",
-			valid:   true,
-		},
-		{
-			path:    "daily/server1-db1-daily-20250523-000000.sql.gz",
-			content: "backup data",
-			valid:   true,
-		},
-		{
-			path:    "manual/prod-server-users-manual-20250523-143052.sql.gz",
-			content: "backup data",
-			valid:   true,
-		},
-		{
-			path:    "invalid/server1-db1.sql.gz",
-			content: "backup data",
-			valid:   false,
-		},
-		{
-			path:    ".metadata/metadata.json",
-			content: "{}",
-			valid:   false,
-		},
-		{
-			path:    "other/README.md",
-			content: "readme",
-			valid:   false,
-		},
-	}
-
-	for _, tf := range testFiles {
-		fullPath := filepath.Join(tempDir, tf.path)
-		err := os.MkdirAll(filepath.Dir(fullPath), 0750)
-		require.NoError(t, err)
-
-		err = os.WriteFile(fullPath, []byte(tf.content), 0644)
-		require.NoError(t, err)
-	}
-
-	// Scan local storage
-	backups := scanLocalStorage(tempDir)
-
-	// Verify results
-	expectedCount := 3
-	assert.Len(t, backups, expectedCount, "Expected %d valid backups", expectedCount)
-
-	// Check specific backups
-	backupMap := make(map[string]RecoveredBackup)
-	for _, b := range backups {
-		backupMap[b.Filename] = b
-	}
-
-	// Verify hourly backup
-	hourly, ok := backupMap["server1-db1-hourly-20250523-100000.sql.gz"]
-	assert.True(t, ok, "Expected to find hourly backup")
-	assert.Equal(t, "server1", hourly.ServerName)
-	assert.Equal(t, "db1", hourly.Database)
-	assert.Equal(t, "hourly", hourly.BackupType)
-	assert.Equal(t, "20250523-100000", hourly.Timestamp)
-	assert.False(t, hourly.IsS3)
-
-	// Verify manual backup with hyphenated server name
-	manual, ok := backupMap["prod-server-users-manual-20250523-143052.sql.gz"]
-	assert.True(t, ok, "Expected to find manual backup")
-	assert.Equal(t, "prod-server", manual.ServerName)
-	assert.Equal(t, "users", manual.Database)
-}
-
-func TestReconcileBackups(t *testing.T) {
-	now := time.Now()
-
-	testBackups := []RecoveredBackup{
-		// Duplicate - local
-		{
-			Filename:   "server1-db1-hourly-20250523-100000.sql.gz",
-			Path:       "/backups/hourly/server1-db1-hourly-20250523-100000.sql.gz",
-			Size:       1024,
-			ModTime:    now,
-			ServerName: "server1",
-			Database:   "db1",
-			BackupType: "hourly",
-			Timestamp:  "20250523-100000",
-			IsS3:       false,
-		},
-		// Duplicate - S3
-		{
-			Filename:   "server1-db1-hourly-20250523-100000.sql.gz",
-			Path:       "backups/hourly/server1-db1-hourly-20250523-100000.sql.gz",
-			Size:       1024,
-			ModTime:    now,
-			ServerName: "server1",
-			Database:   "db1",
-			BackupType: "hourly",
-			Timestamp:  "20250523-100000",
-			IsS3:       true,
-			S3Bucket:   "backup-bucket",
-			S3Key:      "backups/hourly/server1-db1-hourly-20250523-100000.sql.gz",
-		},
-		// Unique backup
-		{
-			Filename:   "server2-db2-daily-20250523-000000.sql.gz",
-			Path:       "/backups/daily/server2-db2-daily-20250523-000000.sql.gz",
-			Size:       2048,
-			ModTime:    now,
-			ServerName: "server2",
-			Database:   "db2",
-			BackupType: "daily",
-			Timestamp:  "20250523-000000",
-			IsS3:       false,
-		},
-	}
-
-	reconciled := reconcileBackups(testBackups)
-
-	// Should have 2 unique backups
-	assert.Len(t, reconciled, 2)
-
-	// Find the reconciled duplicate
-	var merged RecoveredBackup
-	for _, b := range reconciled {
-		if b.ServerName == "server1" && b.Database == "db1" {
-			merged = b
-			break
 		}
 	}
 
-	// Verify merged backup has info from both sources
-	assert.Equal(t, "server1", merged.ServerName)
-	assert.Equal(t, "db1", merged.Database)
-	assert.Equal(t, "/backups/hourly/server1-db1-hourly-20250523-100000.sql.gz", merged.Path)
-	assert.Equal(t, "backup-bucket", merged.S3Bucket)
-	assert.Equal(t, "backups/hourly/server1-db1-hourly-20250523-100000.sql.gz", merged.S3Key)
+	// Reconciled: one set per backup run, server/db exact even for the
+	// underscored server (taken from the by-server copy).
+	sets := reconcileBackups(append(local, s3Copies...))
+	require.Len(t, sets, len(want))
+	type id struct{ server, db, typ string }
+	setBy := map[id]RecoveredBackupSet{}
+	for _, s := range sets {
+		setBy[id{s.ServerName, s.Database, s.BackupType}] = s
+	}
+	for _, w := range want {
+		s, ok := setBy[id{w.server, w.db, w.backupType}]
+		require.True(t, ok, "no recovered set for %s/%s/%s", w.server, w.db, w.backupType)
+		assert.True(t, w.at.Equal(s.CreatedAt))
+		assert.Equal(t, w.localPaths, s.LocalPaths)
+		assert.Equal(t, w.s3Keys, s.S3Keys)
+		assert.Equal(t, int64(w.size), s.Size)
+	}
+
+	// Processed into the store: the record IDs the store issued get the status
+	// and paths (no name-derived ID the store never saw).
+	store := newFakeStore()
+	processRecoveredBackups(store, append(local, s3Copies...))
+	require.Len(t, store.created, len(want))
+	got := map[id]*types.BackupMeta{}
+	for _, m := range store.created {
+		got[id{m.ServerName, m.Database, m.BackupType}] = m
+	}
+	for _, w := range want {
+		m, ok := got[id{w.server, w.db, w.backupType}]
+		require.True(t, ok, "no metadata record for %s/%s/%s", w.server, w.db, w.backupType)
+		assert.Equal(t, types.StatusSuccess, m.Status)
+		assert.Equal(t, types.StatusSuccess, m.S3UploadStatus)
+		assert.Equal(t, w.localPaths, m.LocalPaths)
+		assert.Equal(t, w.s3Keys, m.S3Keys)
+		assert.Equal(t, int64(w.size), m.Size)
+	}
+
+	// Merge mode: a second pass over the same files adds nothing.
+	*mergeMode = true
+	again := newFakeStore()
+	for _, m := range store.created {
+		again.existing = append(again.existing, *m)
+	}
+	processRecoveredBackups(again, append(local, s3Copies...))
+	assert.Empty(t, again.created, "merge mode must skip backups already in metadata")
+}
+
+// TestReconcileByTypeOnly: with no by-server copy, a by-type copy still recovers,
+// split at the first "_" (the documented best guess).
+func TestReconcileByTypeOnly(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "backups")
+	withRecoveryConfig(t, root, "")
+	p := filepath.Join(root, "by-type", "daily", "srv1_app_db-2026-11-22-01-02-03.sql.gz")
+	require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o750))
+	require.NoError(t, os.WriteFile(p, []byte("x"), 0o600))
+
+	sets := reconcileBackups(scanLocalStorage(root))
+	require.Len(t, sets, 1)
+	assert.Equal(t, "srv1", sets[0].ServerName)
+	assert.Equal(t, "app_db", sets[0].Database)
+	assert.Equal(t, "daily", sets[0].BackupType)
+	assert.Equal(t, map[string]string{backup.OrgByType: p}, sets[0].LocalPaths)
+	assert.Empty(t, sets[0].S3Keys)
+}
+
+// TestOldFlatNamesAreNotBackups: the flat {server}-{db}-{type}-{ts} name the tool
+// used to expect is not a layout GoSQLGuard writes.
+func TestOldFlatNamesAreNotBackups(t *testing.T) {
+	root := t.TempDir()
+	withRecoveryConfig(t, root, "")
+	p := filepath.Join(root, "hourly", "server1-db1-hourly-20250523-100000.sql.gz")
+	require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o750))
+	require.NoError(t, os.WriteFile(p, []byte("x"), 0o600))
+	assert.Empty(t, scanLocalStorage(root))
 }
 
 func TestFormatBytes(t *testing.T) {
