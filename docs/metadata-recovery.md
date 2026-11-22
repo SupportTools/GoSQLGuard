@@ -193,27 +193,30 @@ metadata-recovery -config /path/to/config.yaml -verbose
 
 #### What it does
 
-1. Scans local and S3 storage for backup files matching the pattern: `{server}-{database}-{type}-{timestamp}.sql.gz`
-2. Parses filenames to extract metadata (server, database, backup type, timestamp)
-3. Gets file sizes and modification times
-4. Rebuilds the metadata structure
-5. Handles conflicts and duplicates (prefers files that exist in both local and S3)
-6. Validates the rebuilt metadata
+1. Scans local storage (under `local.backupDirectory`) and S3 (under `s3.prefix`) for the two layouts GoSQLGuard writes every backup in:
+   - `by-server/<server>/<type>/<database>-<YYYY-MM-DD-HH-MM-SS>.sql.gz`
+   - `by-type/<type>/<server>_<database>-<YYYY-MM-DD-HH-MM-SS>.sql.gz`
+   Anything else (including the `.metadata` directory) is skipped.
+2. Parses server, database, backup type and timestamp from the path (the parser is `backup.ParseBackupPath`, the inverse of the path constructor the backup code uses)
+3. Gets file sizes
+4. Groups the by-server and by-type copies, local and S3, of one backup run into a single metadata record holding every path. Server and database come from the by-server copy, because a by-type file name joins them with `_`; when only a by-type copy exists, the name is split at the first `_`.
+5. In `-merge` mode, skips backups whose paths an existing record already holds
+6. Records each backup with status success and its local paths / S3 keys. Known limitation: the metadata store interface has no way to set a record's creation time, so recovered records carry the recovery time as `createdAt`; the parsed backup time is logged with `-verbose`.
 7. Saves the metadata (unless -dry-run is specified)
 
 #### Example Output
 
 ```
 Starting metadata recovery process...
-Found 48 backups in local storage
-Found 72 backups in S3 storage
-Recovered backup: server1-testdb-hourly-20250523-100000
-Recovered backup: server1-testdb-hourly-20250523-110000
+Found 96 backups in local storage
+Found 96 backups in S3 storage
+Recovered backup server1/testdb/hourly@2025-05-23-10-00-00 (created 2025-05-23T10:00:00Z) as server1-testdb-hourly-20251122-071500-1a2b3c4d
+Recovered backup server1/testdb/hourly@2025-05-23-11-00-00 (created 2025-05-23T11:00:00Z) as server1-testdb-hourly-20251122-071500-5e6f7a8b
 ...
 
 Recovery Summary:
-- Total backups recovered: 96
-- Successful backups: 96
+- Total backups recovered: 48
+- Successful backups: 48
 - Failed backups: 0
 - Total local size: 1.2 GB
 - Total S3 size: 2.4 GB

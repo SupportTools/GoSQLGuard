@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -27,57 +28,95 @@ func TestMySQLStoreInitialization(t *testing.T) {
 	assert.True(t, dbStore.initialized)
 }
 
-// TestMySQLStoreMockOperations tests MySQL operations with mocked database
-func TestMySQLStoreMockOperations(t *testing.T) {
-	// Create mock database
-	sqlDB, mock, err := sqlmock.New()
+// newMockDBStore returns a DBStore on a sqlmock connection that matches SQL
+// exactly (after whitespace normalization), so an expectation names the whole
+// statement GORM sends, not just a keyword.
+func newMockDBStore(t *testing.T) (*DBStore, sqlmock.Sqlmock) {
+	t.Helper()
+	sqlDB, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
 	require.NoError(t, err)
-	defer sqlDB.Close()
+	t.Cleanup(func() { _ = sqlDB.Close() })
 
-	// Create GORM DB with mock
-	dialector := mysql.New(mysql.Config{
+	db, err := gorm.Open(mysql.New(mysql.Config{
 		Conn:                      sqlDB,
 		SkipInitializeWithVersion: true,
-	})
-	db, err := gorm.Open(dialector, &gorm.Config{})
+	}), &gorm.Config{})
 	require.NoError(t, err)
 
-	// Create DBStore
-	dbStore := &DBStore{
-		db:          db,
-		initialized: true,
-	}
+	return &DBStore{db: db, initialized: true}, mock
+}
 
-	// Test CreateBackupMeta
+// TestMySQLStoreMockOperations pins the statements CreateBackupMeta and
+// UpdateBackupStatus send, in order, inside their transactions. Any missing,
+// extra or reordered statement, or a wrong argument, fails the test
+// (cluster-services-1554: the previous version asserted nothing).
+func TestMySQLStoreMockOperations(t *testing.T) {
+	dbStore, mock := newMockDBStore(t)
+
+	// CreateBackupMeta: one INSERT in GORM's default transaction.
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO `backups` (`id`,`server_name`,`server_type`,`database_name`,`backup_type`,`created_at`,`completed_at`,`size`,`status`,`error_message`,`retention_policy`,`expires_at`,`log_file_path`,`s3_upload_status`,`s3_upload_error`,`s3_upload_complete`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").
+		WithArgs(sqlmock.AnyArg(), "server1", "mysql", "testdb", "daily", sqlmock.AnyArg(), nil, int64(0),
+			string(types.StatusPending), "", "", nil, "", string(types.StatusPending), "", nil).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
 	backup := dbStore.CreateBackupMeta("server1", "mysql", "testdb", "daily")
-	assert.NotNil(t, backup)
+	require.NotNil(t, backup)
 	assert.Equal(t, "server1", backup.ServerName)
 	assert.Equal(t, "testdb", backup.Database)
 	assert.Equal(t, "daily", backup.BackupType)
 	assert.Equal(t, types.StatusPending, backup.Status)
+	require.NoError(t, mock.ExpectationsWereMet(), "CreateBackupMeta statements")
 
-	// Test UpdateBackupStatus with mock expectations
 	backupID := backup.ID
 
-	// Mock the UPDATE query
+	// UpdateBackupStatus: status update, replace local paths, recompute stats,
+	// all in one transaction.
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE").
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), backupID).
-		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("UPDATE `backups` SET `completed_at`=?,`error_message`=?,`size`=?,`status`=? WHERE id = ?").
+		WithArgs(sqlmock.AnyArg(), "", int64(1024), string(types.StatusSuccess), backupID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM `local_paths` WHERE backup_id = ?").
+		WithArgs(backupID).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO `local_paths` (`backup_id`,`organization`,`path`) VALUES (?,?,?)").
+		WithArgs(backupID, "by-server", "/backup1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT COALESCE(SUM(size), 0) FROM `backups` WHERE status = ?").
+		WithArgs(string(types.StatusSuccess)).
+		WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(int64(1024)))
+	mock.ExpectQuery("SELECT COALESCE(SUM(size), 0) FROM `backups` WHERE s3_upload_status = ?").
+		WithArgs(string(types.StatusSuccess)).
+		WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(int64(0)))
+	mock.ExpectExec("UPDATE `metadata_stats` SET `last_updated`=?,`total_local_size`=?,`total_s3_size`=? WHERE id = ?").
+		WithArgs(sqlmock.AnyArg(), int64(1024), int64(0), 1).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	// Note: In real implementation, we'd need to handle the complex GORM queries
-	err = dbStore.UpdateBackupStatus(backupID, types.StatusSuccess, map[string]string{"local": "/backup1"}, 1024, "")
+	err := dbStore.UpdateBackupStatus(backupID, types.StatusSuccess, map[string]string{"by-server": "/backup1"}, 1024, "")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet(), "UpdateBackupStatus statements")
+}
 
-	// Check that no error occurred (in a mock environment, GORM might not return errors)
-	if err != nil {
-		t.Logf("UpdateBackupStatus returned error: %v", err)
-	}
+// TestMySQLStoreUpdateBackupStatusRollsBack: a failing statement inside the
+// transaction rolls it back and returns the error.
+func TestMySQLStoreUpdateBackupStatusRollsBack(t *testing.T) {
+	dbStore, mock := newMockDBStore(t)
 
-	// In a real test with a database, we would query to verify the update
-	// For this mock test, we just ensure no error occurred
-	// Note: With mocked DB, the actual update won't happen
-	_ = mock
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `backups` SET `completed_at`=?,`error_message`=?,`size`=?,`status`=? WHERE id = ?").
+		WithArgs(sqlmock.AnyArg(), "boom", int64(0), string(types.StatusError), "b1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM `local_paths` WHERE backup_id = ?").
+		WithArgs("b1").
+		WillReturnError(errors.New("disk full"))
+	mock.ExpectRollback()
+
+	err := dbStore.UpdateBackupStatus("b1", types.StatusError, nil, 0, "boom")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "disk full")
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 // TestMySQLStoreMigration tests migration from file to database
